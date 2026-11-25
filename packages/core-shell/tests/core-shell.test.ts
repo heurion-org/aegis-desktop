@@ -15,6 +15,8 @@ import {
 } from '../src/entitlements.ts'
 import { selectAgentForRole } from '../src/roles.ts'
 import { filterTreeEntries, upsertSyncRule } from '../src/components/workspace-tree.ts'
+import { brandMarkSvg, iconHtml } from '../src/icons.ts'
+import { shouldShowOnboardingWizard } from '../src/components/onboarding-wizard.ts'
 
 test('Free tier permits local .md and coding files while gating rich CRDT formats to Cloud Pro', () => {
   const md = resolveFormatAccess('notes/architecture.md', DEFAULT_FREE_ENTITLEMENTS)
@@ -268,3 +270,16 @@ test('filterTreeEntries keeps matching files and their ancestor directories', ()
     ['docs', 'docs/specs', 'docs/specs/v1.md'],
   )
 })
+
+test('vector SVG icon helpers and onboarding wizard trigger work cleanly without emojis', () => {
+  const shield = iconHtml('shield')
+  assert.match(shield, /^<svg class="aos-icon" viewBox="0 0 20 20"/)
+  const mark = brandMarkSvg('aos-boot-mark')
+  assert.match(mark, /class="aos-brand-mark aos-boot-mark"/)
+
+  assert.equal(shouldShowOnboardingWizard({ completedBefore: false, workspaceCount: 2 }), true)
+  assert.equal(shouldShowOnboardingWizard({ completedBefore: true, workspaceCount: 0 }), true)
+  assert.equal(shouldShowOnboardingWizard({ completedBefore: true, workspaceCount: 1 }), false)
+  assert.equal(shouldShowOnboardingWizard({ completedBefore: true, workspaceCount: 1, forceOpen: true }), true)
+})
+

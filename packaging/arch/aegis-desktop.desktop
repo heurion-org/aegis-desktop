@@ -3,6 +3,7 @@ Type=Application
 Name=Aegis Desktop
 Comment=Local CoW Sandbox Workbench, Writing Studio, and Data Studio for Aegis OS
 Exec=aegis-desktop %U
+Icon=aegis-desktop
 Terminal=false
 Categories=Development;Office;Utility;
 StartupWMClass=aegis-desktop

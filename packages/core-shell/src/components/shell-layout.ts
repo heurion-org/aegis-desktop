@@ -2,6 +2,8 @@ import { renderAgentOnboarding } from './agent-onboarding.ts'
 import { renderApprovalPanel } from './approval-modal.ts'
 import { TaskStreamController, type TaskArtifactRef } from './task-stream.ts'
 import { renderWorkspaceTree, upsertSyncRule } from './workspace-tree.ts'
+import { brandMarkSvg, iconHtml } from '../icons.ts'
+import { getThemePref, resolveEffectiveTheme, setThemePref } from '../theme.ts'
 import {
   applySyncModeFilter,
   type AegisDaemonClient,
@@ -34,6 +36,7 @@ export interface CoreShellOptions {
   onOpenWorkspacePrompt?: () => Promise<string | null>
   onRequestUpgrade?: (reason: string) => void
   onNewEscalation?: (esc: PendingEscalation) => void
+  onOpenWizard?: () => void
   listArtifacts?: (workspaceId: string) => Promise<TaskArtifactRef[]>
 }
 
@@ -122,10 +125,35 @@ export class AegisCoreShell {
     }
   }
 
+  getAgentsSnapshot(): DesktopAgentStatus[] {
+    return this.agents
+  }
+
+  getWorkspacesSnapshot(): DesktopWorkspace[] {
+    return this.workspaces
+  }
+
+  getActiveWorkspaceSnapshot(): DesktopWorkspace | null {
+    return this.activeWorkspace
+  }
+
+  getSandboxStatus(): { ready: boolean; driver: string } {
+    return { ready: this.sandboxHealthy, driver: this.sandboxDriver }
+  }
+
+  getEntitlementsSnapshot(): DesktopEntitlements {
+    return this.entitlements
+  }
+
+  setAgentsSnapshot(agents: DesktopAgentStatus[]): void {
+    this.agents = agents
+    this.render()
+  }
+
   private renderApprovalsAndBell(): void {
     if (this.approvalBellEl) {
       this.approvalBellEl.className = `aos-badge aos-bell-badge ${this.escalations.length > 0 ? 'warn has-pending' : 'muted'}`
-      this.approvalBellEl.textContent = `🔔 Approvals (${this.escalations.length})`
+      this.approvalBellEl.innerHTML = `${iconHtml('bell')}<span>Approvals (${this.escalations.length})</span>`
     }
     if (this.approvalsContainerEl) {
       renderApprovalPanel({
@@ -316,7 +344,7 @@ export class AegisCoreShell {
 
     const brand = document.createElement('div')
     brand.className = 'aos-brand'
-    brand.innerHTML = '<strong>Aegis Desktop</strong>'
+    brand.innerHTML = `${brandMarkSvg()}<span class="aos-brand-text"><strong>AEGIS</strong><small>HEURION DESKTOP</small></span>`
 
     const orgBadge = document.createElement('span')
     orgBadge.className = 'aos-badge info aos-org-badge'
@@ -344,7 +372,7 @@ export class AegisCoreShell {
     const openBtn = document.createElement('button')
     openBtn.type = 'button'
     openBtn.className = 'aos-btn aos-btn-sm'
-    openBtn.textContent = '+ Workspace'
+    openBtn.innerHTML = `${iconHtml('plus')}<span>Workspace</span>`
     openBtn.onclick = async () => {
       const path = (await this.opts.onOpenWorkspacePrompt?.()) ?? window.prompt('Workspace directory path:')
       if (!path) return
@@ -399,7 +427,7 @@ export class AegisCoreShell {
     const refreshBtn = document.createElement('button')
     refreshBtn.type = 'button'
     refreshBtn.className = 'aos-btn aos-btn-sm'
-    refreshBtn.textContent = '↻ Refresh'
+    refreshBtn.innerHTML = `${iconHtml('refresh')}<span>Refresh</span>`
     refreshBtn.onclick = () => {
       refreshBtn.disabled = true
       void this.refresh().finally(() => {
@@ -410,6 +438,30 @@ export class AegisCoreShell {
     const statusRight = document.createElement('div')
     statusRight.className = 'aos-topbar-right'
 
+    if (this.opts.onOpenWizard) {
+      const guideBtn = document.createElement('button')
+      guideBtn.type = 'button'
+      guideBtn.className = 'aos-btn aos-btn-sm'
+      guideBtn.innerHTML = `${iconHtml('compass')}<span>Guide</span>`
+      guideBtn.title = 'Open interactive setup & workflow guide'
+      guideBtn.onclick = () => this.opts.onOpenWizard?.()
+      statusRight.appendChild(guideBtn)
+    }
+
+    const effectiveTheme = resolveEffectiveTheme(getThemePref())
+    const themeBtn = document.createElement('button')
+    themeBtn.type = 'button'
+    themeBtn.className = 'aos-btn aos-btn-sm'
+    themeBtn.innerHTML = iconHtml(effectiveTheme === 'dark' ? 'sun' : 'moon')
+    themeBtn.title =
+      effectiveTheme === 'dark' ? 'Switch to Nordic Editorial Light' : 'Switch to Nordic Forest Dark'
+    themeBtn.onclick = () => {
+      const next = effectiveTheme === 'dark' ? 'light' : 'dark'
+      setThemePref(next)
+      this.render()
+    }
+    statusRight.appendChild(themeBtn)
+
     const approvalBell = document.createElement('button')
     approvalBell.type = 'button'
     this.approvalBellEl = approvalBell
@@ -419,7 +471,7 @@ export class AegisCoreShell {
 
     const sandboxPill = document.createElement('span')
     sandboxPill.className = `aos-badge ${this.sandboxHealthy ? 'ok' : 'warn'}`
-    sandboxPill.textContent = `Sandbox: ${this.sandboxDriver}`
+    sandboxPill.innerHTML = `${iconHtml('shield')}<span>${this.sandboxDriver}</span>`
 
     const tierBtn = document.createElement('button')
     tierBtn.type = 'button'

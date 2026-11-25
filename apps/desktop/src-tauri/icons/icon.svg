@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="heurion-forest" x1="120" y1="80" x2="904" y2="944" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#151C19" />
+      <stop offset="100%" stop-color="#233E33" />
+    </linearGradient>
+    <linearGradient id="heurion-mint-glow" x1="280" y1="260" x2="780" y2="620" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00C472" />
+      <stop offset="100%" stop-color="#2CE092" />
+    </linearGradient>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="208" fill="url(#heurion-forest)" />
+  <rect x="82" y="82" width="860" height="860" rx="192" fill="none" stroke="#E3ECE7" stroke-opacity="0.18" stroke-width="6" />
+  <g transform="translate(228, 224)">
+    <rect x="0" y="0" width="112" height="576" rx="56" fill="#FAF8F4" />
+    <rect x="448" y="180" width="112" height="396" rx="56" fill="#FAF8F4" />
+    <rect x="78" y="232" width="386" height="112" rx="56" fill="url(#heurion-mint-glow)" />
+    <circle cx="504" cy="72" r="72" fill="url(#heurion-mint-glow)" />
+  </g>
+</svg>

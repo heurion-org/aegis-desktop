@@ -1,4 +1,5 @@
 import { ROLE_CATALOG, selectAgentForRole, type AgentRole } from '../roles.ts'
+import { iconHtml, type IconName } from '../icons.ts'
 import type {
   AegisDaemonClient,
   DesktopAgentStatus,
@@ -26,11 +27,11 @@ export interface TaskStreamOptions {
   onTaskUpdated?: (task: DesktopTaskRecord) => void
 }
 
-const ROLE_ICONS: Record<AgentRole, string> = {
-  writer: '✍️',
-  coder: '💻',
-  analyst: '📊',
-  reviewer: '✨',
+const ROLE_ICONS: Record<AgentRole, IconName> = {
+  writer: 'pen',
+  coder: 'terminal',
+  analyst: 'chartBar',
+  reviewer: 'sparkles',
 }
 
 export class TaskStreamController {
@@ -114,7 +115,7 @@ export class TaskStreamController {
       chip.type = 'button'
       chip.className = `aos-role-chip ${r.id === this.role ? 'is-active' : ''}`
       chip.title = r.description
-      chip.textContent = `${ROLE_ICONS[r.id]} ${r.label}`
+      chip.innerHTML = `${iconHtml(ROLE_ICONS[r.id])}<span>${r.label}</span>`
       chip.onclick = () => {
         this.role = r.id
         this.render()
@@ -154,14 +155,14 @@ export class TaskStreamController {
     for (const art of artifacts) {
       const opt = document.createElement('option')
       opt.value = art.sourcePath ? art.sourcePath : `artifact:${art.id}`
-      opt.textContent = `📎 ${art.title}`
+      opt.textContent = `[Artifact] ${art.title}`
       refPicker.appendChild(opt)
     }
     for (const entry of workspaceFiles) {
       if (entry.is_dir) continue
       const opt = document.createElement('option')
       opt.value = entry.path
-      opt.textContent = `${entry.sync_mode === 'local_only' ? '💻 ' : ''}${entry.path}`
+      opt.textContent = `${entry.sync_mode === 'local_only' ? '[Local] ' : ''}${entry.path}`
       refPicker.appendChild(opt)
     }
     refPicker.onchange = () => {

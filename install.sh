@@ -233,10 +233,38 @@ ensure_local_bin_in_path() {
   done
 }
 
+install_linux_desktop_icons() {
+  local src_icons_dir="${1:-}"
+  local hicolor="${HOME}/.local/share/icons/hicolor"
+
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    info "[dry-run] install app icons into ${hicolor}/{512x512,128x128,scalable}/apps/aegis-desktop.{png,svg}"
+    return 0
+  fi
+
+  mkdir -p "${hicolor}/512x512/apps" "${hicolor}/128x128/apps" "${hicolor}/scalable/apps"
+  if [[ -n "$src_icons_dir" && -d "$src_icons_dir" ]]; then
+    [[ -f "${src_icons_dir}/icon.png" ]] && install -m 644 "${src_icons_dir}/icon.png" "${hicolor}/512x512/apps/aegis-desktop.png"
+    [[ -f "${src_icons_dir}/128x128.png" ]] && install -m 644 "${src_icons_dir}/128x128.png" "${hicolor}/128x128/apps/aegis-desktop.png"
+    [[ -f "${src_icons_dir}/icon.svg" ]] && install -m 644 "${src_icons_dir}/icon.svg" "${hicolor}/scalable/apps/aegis-desktop.svg"
+  else
+    curl -fsSL "https://raw.githubusercontent.com/${DESKTOP_REPO}/main/apps/desktop/src-tauri/icons/icon.png" \
+      -o "${hicolor}/512x512/apps/aegis-desktop.png" 2>/dev/null || true
+    curl -fsSL "https://raw.githubusercontent.com/${DESKTOP_REPO}/main/apps/desktop/src-tauri/icons/128x128.png" \
+      -o "${hicolor}/128x128/apps/aegis-desktop.png" 2>/dev/null || true
+    curl -fsSL "https://raw.githubusercontent.com/${DESKTOP_REPO}/main/apps/desktop/src-tauri/icons/icon.svg" \
+      -o "${hicolor}/scalable/apps/aegis-desktop.svg" 2>/dev/null || true
+  fi
+  have_cmd gtk-update-icon-cache && gtk-update-icon-cache -f -t "$hicolor" >/dev/null 2>&1 || true
+}
+
 install_linux_desktop_entry() {
   local exec_path="$1"
+  local src_icons_dir="${2:-}"
   local apps_dir="${HOME}/.local/share/applications"
   local desktop_file="${apps_dir}/aegis-desktop.desktop"
+
+  install_linux_desktop_icons "$src_icons_dir"
 
   if [[ "$DRY_RUN" -eq 1 ]]; then
     info "[dry-run] write desktop launcher to ${desktop_file} (Exec=${exec_path} %U)"
@@ -250,6 +278,7 @@ Type=Application
 Name=Aegis Desktop
 Comment=Local CoW Sandbox Workbench, Writing Studio, and Data Studio for Aegis OS
 Exec=${exec_path} %U
+Icon=aegis-desktop
 Terminal=false
 Categories=Development;Office;Utility;
 StartupWMClass=aegis-desktop
@@ -268,6 +297,10 @@ uninstall_aegis_desktop() {
     run_cmd rm -f "${HOME}/.local/bin/aegis-desktop"
     run_cmd rm -rf "${HOME}/.local/lib/aegis-desktop" "${HOME}/.local/share/aegis-desktop"
     run_cmd rm -f "${HOME}/.local/share/applications/aegis-desktop.desktop"
+    run_cmd rm -f \
+      "${HOME}/.local/share/icons/hicolor/512x512/apps/aegis-desktop.png" \
+      "${HOME}/.local/share/icons/hicolor/128x128/apps/aegis-desktop.png" \
+      "${HOME}/.local/share/icons/hicolor/scalable/apps/aegis-desktop.svg"
 
     if [[ "$DISTRO" == "debian" ]] && have_cmd dpkg && dpkg -s aegis-desktop >/dev/null 2>&1; then
       warn "System-wide .deb package 'aegis-desktop' is installed. Remove it with: sudo apt-get remove -y aegis-desktop"
@@ -548,10 +581,13 @@ resolve_or_fetch_aegis_os() {
   if have_cmd aegis-os; then
     local existing
     existing="$(command -v aegis-os)"
-    info "Using existing aegis-os at ${existing}"
-    run_cmd cp "$existing" "$dest"
-    run_cmd chmod +x "$dest"
-    return 0
+    if "$existing" desktop-daemon --help >/dev/null 2>&1; then
+      info "Using existing aegis-os at ${existing}"
+      run_cmd cp "$existing" "$dest"
+      run_cmd chmod +x "$dest"
+      return 0
+    fi
+    warn "Existing aegis-os at ${existing} lacks desktop-daemon; fetching ${DEFAULT_AEGIS_OS_TAG}..."
   fi
 
   ohai "Downloading verified aegis-os (${DEFAULT_AEGIS_OS_TAG} / ${TARGET_TRIPLE})..."
@@ -655,7 +691,7 @@ install_from_source() {
   ln -sf "${lib_dir}/aegis-desktop" "${bin_dir}/aegis-desktop"
 
   if [[ "$OS" == "linux" ]]; then
-    install_linux_desktop_entry "${bin_dir}/aegis-desktop"
+    install_linux_desktop_entry "${bin_dir}/aegis-desktop" "${src_dir}/apps/desktop/src-tauri/icons"
   fi
   ensure_local_bin_in_path
   info "Installed source-built Aegis Desktop to ${lib_dir} (launcher: ${bin_dir}/aegis-desktop)"

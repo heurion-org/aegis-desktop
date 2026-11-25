@@ -13,9 +13,10 @@ pub struct DaemonConnection {
     pub human_token: String,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct SidecarManager {
     inner: Arc<Mutex<SidecarState>>,
+    start_lock: Arc<Mutex<()>>,
 }
 
 #[derive(Default)]
@@ -80,9 +81,15 @@ fn spawn_sidecar_command(
 }
 
 impl SidecarManager {
-    /// Spawns the bundled `aegis-os desktop-daemon` sidecar on `127.0.0.1:0` and blocks
-    /// briefly until the 1-line JSON handshake is received on stdout.
+    /// Spawns the bundled `aegis-os desktop-daemon` sidecar on `127.0.0.1:0` and waits
+    /// on a background worker thread until the 1-line JSON handshake is received on stdout.
+    /// Concurrent callers serialize via `start_lock` so warmup and WebView boot never spawn duplicates.
     pub fn start(&self, app: &AppHandle) -> Result<DaemonConnection, String> {
+        let _start_guard = self
+            .start_lock
+            .lock()
+            .map_err(|e| format!("sidecar start lock poisoned: {e}"))?;
+
         {
             let guard = self.inner.lock().map_err(|e| format!("sidecar lock poisoned: {e}"))?;
             if let Some(conn) = &guard.connection {
@@ -97,6 +104,8 @@ impl SidecarManager {
 
         tauri::async_runtime::spawn(async move {
             let mut sent = false;
+            let mut stderr_tail: Vec<String> = Vec::new();
+
             while let Some(event) = rx.recv().await {
                 match event {
                     CommandEvent::Stdout(line_bytes) => {
@@ -120,6 +129,18 @@ impl SidecarManager {
                             }
                         }
                     }
+                    CommandEvent::Stderr(err_bytes) => {
+                        let text = String::from_utf8_lossy(&err_bytes);
+                        for line in text.lines() {
+                            let trimmed = line.trim();
+                            if !trimmed.is_empty() {
+                                if stderr_tail.len() >= 12 {
+                                    stderr_tail.remove(0);
+                                }
+                                stderr_tail.push(trimmed.to_string());
+                            }
+                        }
+                    }
                     CommandEvent::Error(err) => {
                         if !sent {
                             let _ = tx.send(Err(format!("daemon error: {err}")));
@@ -132,8 +153,13 @@ impl SidecarManager {
                             guard.connection = None;
                         }
                         if !sent {
+                            let tail = if stderr_tail.is_empty() {
+                                String::new()
+                            } else {
+                                format!(": {}", stderr_tail.join(" | "))
+                            };
                             let _ = tx.send(Err(format!(
-                                "aegis-os desktop-daemon exited before handshake (code {:?})",
+                                "aegis-os desktop-daemon exited before handshake (code {:?}){tail}",
                                 payload.code
                             )));
                         }
@@ -149,9 +175,18 @@ impl SidecarManager {
             guard.child = Some(child);
         }
 
-        conn_rx
-            .recv_timeout(std::time::Duration::from_secs(15))
-            .map_err(|e| format!("timed out waiting for desktop-daemon handshake: {e}"))?
+        match conn_rx.recv_timeout(std::time::Duration::from_secs(8)) {
+            Ok(res) => {
+                if res.is_err() {
+                    self.shutdown();
+                }
+                res
+            }
+            Err(e) => {
+                self.shutdown();
+                Err(format!("timed out waiting for desktop-daemon handshake: {e}"))
+            }
+        }
     }
 
     pub fn get_connection(&self) -> Option<DaemonConnection> {
@@ -168,4 +203,3 @@ impl SidecarManager {
         }
     }
 }
-

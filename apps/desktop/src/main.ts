@@ -3,8 +3,14 @@ import {
   AegisCoreShell,
   AegisDaemonClient,
   DEFAULT_FREE_ENTITLEMENTS,
+  applyTheme,
+  brandMarkSvg,
   decodeEntitlementJwtPayload,
+  iconHtml,
   isEntitlementClaimsFresh,
+  isOnboardingCompleted,
+  renderOnboardingWizard,
+  shouldShowOnboardingWizard,
   type DesktopConnection,
   type DesktopEntitlements,
 } from '@aegis/core-shell'
@@ -26,6 +32,8 @@ declare global {
 
 const SESSION_CONN_KEY = 'aegis.desktop.dev_connection'
 const ENTITLEMENT_JWT_KEY = 'aegis.desktop.entitlement_jwt'
+
+applyTheme()
 
 async function resolveConnection(): Promise<DesktopConnection | null> {
   const tauri = window.__TAURI_INTERNALS__
@@ -120,6 +128,7 @@ function showUpgradeModal(opts: {
   modal.className = 'aos-modal'
 
   const heading = document.createElement('h3')
+  heading.className = 'aos-serif-title'
   heading.textContent = 'Aegis Cloud Pro Entitlements'
 
   const reasonEl = document.createElement('p')
@@ -130,7 +139,7 @@ function showUpgradeModal(opts: {
   features.className = 'aos-modal-list'
   features.innerHTML = `
     <li><strong>Dual-Surface CRDT:</strong> Rich <code>.docx</code>, <code>.pptx</code>, <code>.pdf</code>, <code>.tex</code> editing.</li>
-    <li><strong>Encrypted Yjs Cloud Sync:</strong> Selective sync with <code>local_only</code> data stay-on-device privacy rules.</li>
+    <li><strong>Encrypted Yjs Cloud Sync:</strong> Selective sync with <code>local_only</code> stay-on-device privacy rules.</li>
   `
 
   const tokenInput = document.createElement('textarea')
@@ -201,34 +210,80 @@ function showUpgradeModal(opts: {
   document.body.appendChild(backdrop)
 }
 
-function renderStandaloneConnectScreen(root: HTMLElement, onConnected: (conn: DesktopConnection) => void): void {
+function renderBootSplash(root: HTMLElement): void {
+  root.innerHTML = `
+    <div class="aos-connect-wrap">
+      <div class="aos-boot-card">
+        ${brandMarkSvg('aos-boot-mark')}
+        <div class="aos-eyebrow">HEURION × AEGIS OS</div>
+        <h2 class="aos-serif-title">Starting Local Control Plane…</h2>
+        <p class="aos-muted">Initializing Copy-on-Write sandbox daemon on 127.0.0.1</p>
+        <div class="aos-boot-bar"><span></span></div>
+      </div>
+    </div>
+  `
+}
+
+function renderStandaloneConnectScreen(
+  root: HTMLElement,
+  onConnected: (conn: DesktopConnection) => void,
+  errorDetail?: string,
+  onRetrySidecar?: () => void,
+): void {
   root.innerHTML = ''
   const wrap = document.createElement('div')
   wrap.className = 'aos-connect-wrap'
 
   const card = document.createElement('form')
   card.className = 'aos-connect-card'
-  card.innerHTML = `
-    <h2>Aegis Desktop · Local Control Plane</h2>
-    <p class="aos-muted">Run inside Tauri (auto-spawns bundled <code>aegis-os desktop-daemon</code>) or connect to a running daemon session below:</p>
-  `
+
+  const head = document.createElement('div')
+  head.className = 'aos-wizard-brand'
+  head.innerHTML = `${brandMarkSvg()}<div><span class="aos-eyebrow">HEURION × AEGIS DESKTOP</span><strong>Local Control Plane</strong></div>`
+
+  const desc = document.createElement('p')
+  desc.className = 'aos-muted'
+  desc.textContent = errorDetail
+    ? 'Could not auto-start the bundled aegis-os daemon. Retry sidecar startup or connect manually below.'
+    : 'Run inside Tauri (auto-spawns aegis-os desktop-daemon) or connect to a running local daemon session:'
+
+  card.append(head, desc)
+
+  if (errorDetail) {
+    const errBox = document.createElement('div')
+    errBox.className = 'aos-wizard-feedback error'
+    errBox.innerHTML = `${iconHtml('alertTriangle')}`
+    const errSpan = document.createElement('span')
+    errSpan.textContent = errorDetail
+    errBox.appendChild(errSpan)
+    card.appendChild(errBox)
+
+    if (onRetrySidecar) {
+      const retryBtn = document.createElement('button')
+      retryBtn.type = 'button'
+      retryBtn.className = 'aos-btn aos-btn-primary'
+      retryBtn.innerHTML = `${iconHtml('refresh')}<span>Retry Sidecar Startup</span>`
+      retryBtn.onclick = onRetrySidecar
+      card.appendChild(retryBtn)
+    }
+  }
 
   const urlInput = document.createElement('input')
   urlInput.type = 'url'
-  urlInput.className = 'aos-textarea'
+  urlInput.className = 'aos-input'
   urlInput.placeholder = 'http://127.0.0.1:43123'
   urlInput.required = true
 
   const tokenInput = document.createElement('input')
   tokenInput.type = 'password'
-  tokenInput.className = 'aos-textarea'
+  tokenInput.className = 'aos-input'
   tokenInput.placeholder = 'aht_...'
   tokenInput.required = true
 
   const connectBtn = document.createElement('button')
   connectBtn.type = 'submit'
   connectBtn.className = 'aos-btn aos-btn-primary'
-  connectBtn.textContent = 'Connect to Daemon'
+  connectBtn.innerHTML = `${iconHtml('arrowRight')}<span>Connect to Daemon</span>`
 
   card.append(urlInput, tokenInput, connectBtn)
   card.onsubmit = ev => {
@@ -251,6 +306,14 @@ function renderStandaloneConnectScreen(root: HTMLElement, onConnected: (conn: De
   root.appendChild(wrap)
 }
 
+async function pickFolderViaHost(): Promise<string | null> {
+  const tauri = window.__TAURI_INTERNALS__
+  if (tauri?.invoke) {
+    return tauri.invoke<string | null>('pick_workspace_folder')
+  }
+  return window.prompt('Workspace folder path:')
+}
+
 let activeShell: AegisCoreShell | null = null
 
 async function mountWithConnection(root: HTMLElement, conn: DesktopConnection): Promise<void> {
@@ -260,6 +323,34 @@ async function mountWithConnection(root: HTMLElement, conn: DesktopConnection): 
   const rawTextOverrides = new Set<string>()
   let entitlements = loadSavedEntitlements()
   const bridge = createDesktopWritingBridge(client, dataProducer, () => activeShell?.getActiveRepo() ?? null)
+
+  const launchWizard = (shell: AegisCoreShell) => {
+    const sandbox = shell.getSandboxStatus()
+    renderOnboardingWizard({
+      root,
+      client,
+      sandboxHealthy: sandbox.ready,
+      sandboxDriver: sandbox.driver,
+      workspaces: shell.getWorkspacesSnapshot(),
+      activeWorkspace: shell.getActiveWorkspaceSnapshot(),
+      agents: shell.getAgentsSnapshot(),
+      cloudYjsSync: shell.getEntitlementsSnapshot().cloud_yjs_sync,
+      onPickFolder: pickFolderViaHost,
+      onWorkspaceSelected: async ws => {
+        await shell.refresh()
+        await shell.selectWorkspace(ws)
+      },
+      onAgentsUpdated: nextAgents => {
+        shell.setAgentsSnapshot(nextAgents)
+      },
+      onThemeChanged: () => {
+        shell.render()
+      },
+      onComplete: () => {
+        shell.render()
+      },
+    })
+  }
 
   const shell = new AegisCoreShell({
     root,
@@ -274,13 +365,8 @@ async function mountWithConnection(root: HTMLElement, conn: DesktopConnection): 
         })
       }
     },
-    onOpenWorkspacePrompt: async () => {
-      const tauri = window.__TAURI_INTERNALS__
-      if (tauri?.invoke) {
-        return tauri.invoke<string | null>('pick_workspace_folder')
-      }
-      return window.prompt('Workspace folder path:')
-    },
+    onOpenWorkspacePrompt: pickFolderViaHost,
+    onOpenWizard: () => launchWizard(shell),
     onRequestUpgrade: reason => {
       showUpgradeModal({
         reason,
@@ -324,18 +410,42 @@ async function mountWithConnection(root: HTMLElement, conn: DesktopConnection): 
   activeShell = shell
 
   await shell.refresh()
+
+  if (
+    shouldShowOnboardingWizard({
+      completedBefore: isOnboardingCompleted(),
+      workspaceCount: shell.getWorkspacesSnapshot().length,
+    })
+  ) {
+    launchWizard(shell)
+  }
 }
 
 async function bootstrap(): Promise<void> {
   const root = document.getElementById('app')!
-  const conn = await resolveConnection()
-  if (!conn) {
-    renderStandaloneConnectScreen(root, nextConn => {
-      void mountWithConnection(root, nextConn)
-    })
-    return
+  renderBootSplash(root)
+  try {
+    const conn = await resolveConnection()
+    if (!conn) {
+      renderStandaloneConnectScreen(root, nextConn => {
+        void mountWithConnection(root, nextConn)
+      })
+      return
+    }
+    await mountWithConnection(root, conn)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    renderStandaloneConnectScreen(
+      root,
+      nextConn => {
+        void mountWithConnection(root, nextConn)
+      },
+      message,
+      () => {
+        void bootstrap()
+      },
+    )
   }
-  await mountWithConnection(root, conn)
 }
 
 void bootstrap()

@@ -222,7 +222,7 @@ export function tableToMarkdown(dataset: TabularDataset, maxRows = 12): string {
 export function generateBarChartSvg(title: string, labels: string[], values: number[]): string {
   const count = Math.min(12, labels.length, values.length)
   if (count === 0) {
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 120"><rect width="560" height="120" fill="#0b0e14" rx="8"/><text x="280" y="64" fill="#8ea0b8" font-size="13" text-anchor="middle">${escapeXml(title || 'No numeric data')}</text></svg>`
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 120"><rect width="560" height="120" fill="#FDFCF9" stroke="#DFDAD0" rx="2"/><text x="280" y="64" fill="#646D68" font-size="13" font-family="Inter, sans-serif" text-anchor="middle">${escapeXml(title || 'No numeric data')}</text></svg>`
   }
 
   const width = 560
@@ -245,18 +245,19 @@ export function generateBarChartSvg(title: string, labels: string[], values: num
     const x = Math.round(padLeft + i * barStep + (barStep - barW) / 2)
     const y = Math.round(padTop + (plotH - h))
     const shortLabel = (labels[i] ?? `#${i + 1}`).slice(0, 10)
+    const barFill = i === 0 ? '#00C472' : '#233E33'
     bars.push(
-      `<rect x="${x}" y="${y}" width="${Math.round(barW)}" height="${h}" rx="3" fill="#4c8dff"/>` +
-        `<text x="${Math.round(x + barW / 2)}" y="${height - 16}" fill="#8ea0b8" font-size="10" text-anchor="middle">${escapeXml(shortLabel)}</text>` +
-        `<text x="${Math.round(x + barW / 2)}" y="${Math.max(padTop + 10, y - 4)}" fill="#e6edf7" font-size="10" text-anchor="middle">${escapeXml(Number.isInteger(val) ? String(val) : val.toFixed(1))}</text>`,
+      `<rect x="${x}" y="${y}" width="${Math.round(barW)}" height="${h}" rx="2" fill="${barFill}"/>` +
+        `<text x="${Math.round(x + barW / 2)}" y="${height - 16}" fill="#646D68" font-size="10" font-family="JetBrains Mono, monospace" text-anchor="middle">${escapeXml(shortLabel)}</text>` +
+        `<text x="${Math.round(x + barW / 2)}" y="${Math.max(padTop + 10, y - 4)}" fill="#151C19" font-size="10" font-family="JetBrains Mono, monospace" text-anchor="middle">${escapeXml(Number.isInteger(val) ? String(val) : val.toFixed(1))}</text>`,
     )
   }
 
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}">` +
-    `<rect width="${width}" height="${height}" fill="#0b0e14" rx="8"/>` +
-    `<text x="${padLeft}" y="20" fill="#e6edf7" font-size="13" font-weight="600">${escapeXml(title)}</text>` +
-    `<line x1="${padLeft}" y1="${padTop + plotH}" x2="${width - padRight}" y2="${padTop + plotH}" stroke="#283244"/>` +
+    `<rect width="${width}" height="${height}" fill="#FDFCF9" stroke="#DFDAD0" rx="2"/>` +
+    `<text x="${padLeft}" y="20" fill="#151C19" font-size="13" font-family="Inter, sans-serif" font-weight="600">${escapeXml(title)}</text>` +
+    `<line x1="${padLeft}" y1="${padTop + plotH}" x2="${width - padRight}" y2="${padTop + plotH}" stroke="#C8C2B6"/>` +
     bars.join('') +
     `</svg>`
   )

@@ -1,3 +1,4 @@
+import { iconHtml } from '@aegis/core-shell'
 import type { ArtifactEmbedRef, WritingHostBridge } from './bridge.ts'
 
 export interface FreeMarkdownEditorOptions {
@@ -143,7 +144,7 @@ export async function mountFreeMarkdownEditor(opts: FreeMarkdownEditorOptions): 
     : `${filePath} (Local Free Code · No Cloud Sync)`
   const dirtyBadge = document.createElement('span')
   dirtyBadge.className = 'aos-badge warn sw-dirty-dot'
-  dirtyBadge.textContent = '● Unsaved'
+  dirtyBadge.innerHTML = '<span class="aos-status-dot"></span><span>Unsaved</span>'
   dirtyBadge.hidden = true
   titleGroup.append(title, dirtyBadge)
 
@@ -267,7 +268,7 @@ export async function mountFreeMarkdownEditor(opts: FreeMarkdownEditorOptions): 
       await bridge.writeTextFile(workspaceId, filePath, textarea.value)
       savedContent = textarea.value
       updateMetaAndDirty()
-      saveBtn.textContent = 'Saved ✓'
+      saveBtn.innerHTML = `${iconHtml('check')}<span>Saved</span>`
       setTimeout(() => {
         saveBtn.textContent = 'Save'
       }, 1200)
@@ -366,7 +367,11 @@ export async function mountFreeMarkdownEditor(opts: FreeMarkdownEditorOptions): 
         updateMetaAndDirty()
       }
       const res = await bridge.commitWorkspace(workspaceId, `Accept edits to ${filePath}`)
-      acceptBtn.textContent = res.committed === false ? 'Clean' : 'Accepted ✓'
+      if (res.committed === false) {
+        acceptBtn.textContent = 'Clean'
+      } else {
+        acceptBtn.innerHTML = `${iconHtml('check')}<span>Accepted</span>`
+      }
       setTimeout(() => {
         acceptBtn.textContent = 'Accept Changes'
       }, 1500)
@@ -389,7 +394,7 @@ export async function mountFreeMarkdownEditor(opts: FreeMarkdownEditorOptions): 
         preview.innerHTML = renderMarkdownPreviewHtml(savedContent)
       }
       updateMetaAndDirty()
-      rollbackBtn.textContent = 'Rolled Back ✓'
+      rollbackBtn.innerHTML = `${iconHtml('undo')}<span>Rolled Back</span>`
       setTimeout(() => {
         rollbackBtn.textContent = 'Rollback'
       }, 1500)

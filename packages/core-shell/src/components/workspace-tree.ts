@@ -1,4 +1,5 @@
 import { resolveFormatAccess, type DesktopEntitlements } from '../entitlements.ts'
+import { iconHtml, type IconName } from '../icons.ts'
 import type { SyncMode, SyncPolicy, WorkspaceTreeEntry } from '../daemon-client.ts'
 
 export interface WorkspaceTreeOptions {
@@ -72,10 +73,20 @@ function nextSyncMode(current: SyncMode): SyncMode {
   return 'local_only'
 }
 
-function syncChipLabel(mode: SyncMode): string {
-  if (mode === 'cloud_crdt') return '☁ CRDT'
-  if (mode === 'cloud_blob') return '📦 Blob'
-  return '💻 Local'
+function syncChipHtml(mode: SyncMode): string {
+  if (mode === 'cloud_crdt') return `${iconHtml('cloud')}<span>CRDT</span>`
+  if (mode === 'cloud_blob') return `${iconHtml('packageBox')}<span>Blob</span>`
+  return `${iconHtml('lock')}<span>Local</span>`
+}
+
+function fileIconName(name: string): IconName {
+  const lower = name.toLowerCase()
+  if (lower.endsWith('.csv') || lower.endsWith('.tsv') || lower.endsWith('.json')) return 'fileTable'
+  if (lower.endsWith('.md') || lower.endsWith('.markdown') || lower.endsWith('.docx') || lower.endsWith('.pdf') || lower.endsWith('.tex')) {
+    return 'fileDoc'
+  }
+  if (/\.(ts|tsx|js|jsx|rs|py|go|sh|css|html|toml|yaml|yml)$/.test(lower)) return 'fileCode'
+  return 'file'
 }
 
 export function renderWorkspaceTree(opts: WorkspaceTreeOptions): void {
@@ -122,7 +133,9 @@ export function renderWorkspaceTree(opts: WorkspaceTreeOptions): void {
   policyBtn.type = 'button'
   policyBtn.className = 'aos-pill'
   const isCloudDefault = syncPolicy.default_mode !== 'local_only' && entitlements.cloud_yjs_sync
-  policyBtn.textContent = isCloudDefault ? '☁ Cloud Sync' : '🔒 Local Only'
+  policyBtn.innerHTML = isCloudDefault
+    ? `${iconHtml('cloud')}<span>Cloud Sync</span>`
+    : `${iconHtml('lock')}<span>Local Only</span>`
   policyBtn.title = entitlements.cloud_yjs_sync
     ? 'Toggle default workspace sync mode'
     : 'Cloud CRDT & Yjs sync unlocks with Cloud Pro'
@@ -207,7 +220,10 @@ export function renderWorkspaceTree(opts: WorkspaceTreeOptions): void {
       toggleBtn.type = 'button'
       toggleBtn.className = 'aos-tree-dir-btn'
       const collapsed = !hasSearch && collapsedDirs.has(entry.path)
-      toggleBtn.textContent = `${collapsed ? '▸' : '▾'} ${entry.name}`
+      toggleBtn.innerHTML = `${iconHtml(collapsed ? 'chevronRight' : 'chevronDown')}${iconHtml(collapsed ? 'folder' : 'folderOpen')}`
+      const dirLabel = document.createElement('span')
+      dirLabel.textContent = entry.name
+      toggleBtn.appendChild(dirLabel)
       toggleBtn.onclick = () => onToggleDir?.(entry.path)
       dirRow.appendChild(toggleBtn)
 
@@ -215,7 +231,7 @@ export function renderWorkspaceTree(opts: WorkspaceTreeOptions): void {
         const syncChip = document.createElement('button')
         syncChip.type = 'button'
         syncChip.className = 'aos-sync-chip'
-        syncChip.textContent = syncChipLabel(entry.sync_mode)
+        syncChip.innerHTML = syncChipHtml(entry.sync_mode)
         syncChip.title = `Folder sync: ${entry.sync_mode} (click to cycle)`
         syncChip.onclick = ev => {
           ev.stopPropagation()
@@ -238,15 +254,19 @@ export function renderWorkspaceTree(opts: WorkspaceTreeOptions): void {
     btn.style.paddingLeft = `${8 + depth * 12}px`
 
     const access = resolveFormatAccess(entry.name, entitlements)
+    const nameWrap = document.createElement('span')
+    nameWrap.className = 'aos-tree-name-wrap'
+    nameWrap.innerHTML = iconHtml(fileIconName(entry.name))
     const nameSpan = document.createElement('span')
     nameSpan.className = 'aos-tree-name'
     nameSpan.textContent = entry.name
     nameSpan.title = entry.path
+    nameWrap.appendChild(nameSpan)
 
     const badge = document.createElement('span')
     if (access.mode === 'locked_cloud_pro') {
       badge.className = 'aos-badge warn'
-      badge.textContent = 'PRO 🔒'
+      badge.innerHTML = `${iconHtml('lock')}<span>PRO</span>`
     } else if (access.mode === 'cloud_dual_surface') {
       badge.className = 'aos-badge info'
       badge.textContent = entry.sync_mode === 'local_only' ? 'LOCAL' : 'CRDT'
@@ -255,7 +275,7 @@ export function renderWorkspaceTree(opts: WorkspaceTreeOptions): void {
       badge.textContent = 'LOCAL'
     }
 
-    btn.append(nameSpan, badge)
+    btn.append(nameWrap, badge)
     btn.onclick = () => onSelectFile(entry)
     li.appendChild(btn)
     list.appendChild(li)

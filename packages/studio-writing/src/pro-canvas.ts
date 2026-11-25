@@ -1,4 +1,4 @@
-import { normalizeExt, resolveFormatAccess, type DesktopEntitlements } from '@aegis/core-shell'
+import { iconHtml, normalizeExt, resolveFormatAccess, type DesktopEntitlements } from '@aegis/core-shell'
 import type { ArtifactEmbedRef, WritingHostBridge } from './bridge.ts'
 
 export interface ProCanvasOptions {
@@ -361,7 +361,8 @@ export async function mountProDualSurfaceCanvas(opts: ProCanvasOptions): Promise
     try {
       await bridge.writeTextFile(workspaceId, filePath, currentContent)
       baselineContent = currentContent
-      canvasHint.textContent = `Saved ${filePath} ✓`
+      canvasHint.innerHTML = `${iconHtml('check')}<span>Saved </span>`
+      canvasHint.appendChild(document.createTextNode(filePath))
       renderSurface()
     } catch (err) {
       canvasHint.textContent = err instanceof Error ? err.message : String(err)
