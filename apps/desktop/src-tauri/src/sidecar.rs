@@ -167,4 +167,5 @@ impl SidecarManager {
             guard.connection = None;
         }
     }
-}\n
+}
+

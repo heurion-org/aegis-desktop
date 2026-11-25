@@ -28,6 +28,14 @@
     "targets": "all",
     "externalBin": [
       "binaries/aegis-os"
-    ]
+    ],
+    "linux": {
+      "deb": {
+        "depends": ["bubblewrap"]
+      },
+      "appimage": {
+        "bundleMediaFramework": false
+      }
+    }
   }
 }

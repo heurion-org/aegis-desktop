@@ -1,0 +1,73 @@
+# Maintainer: Heurion Org <opensource@heurion.org>
+pkgname=aegis-desktop
+pkgver=0.1.0
+pkgrel=1
+_aegis_os_ver=0.12.1
+pkgdesc='Local CoW Sandbox Workbench, Writing Studio, and Data Studio for Aegis OS'
+arch=('x86_64' 'aarch64')
+url='https://github.com/heurion-org/aegis-desktop'
+license=('Apache-2.0')
+depends=(
+  'webkit2gtk-4.1'
+  'gtk3'
+  'libayatana-appindicator'
+  'bubblewrap'
+  'openssl'
+)
+makedepends=(
+  'rust'
+  'cargo'
+  'nodejs'
+  'pnpm'
+  'librsvg'
+  'patchelf'
+  'pkgconf'
+  'curl'
+)
+optdepends=(
+  'claude-code: BYO Claude Code CLI agent'
+  'opencode: BYO OpenCode CLI agent'
+)
+source=(
+  "aegis-desktop-v${pkgver}.tar.gz::https://github.com/heurion-org/aegis-desktop/archive/refs/tags/desktop-v${pkgver}.tar.gz"
+  'aegis-desktop.desktop'
+)
+source_x86_64=(
+  "aegis-os-v${_aegis_os_ver}-x86_64-unknown-linux-gnu.tar.gz::https://github.com/heurion-org/aegis-os/releases/download/v${_aegis_os_ver}/aegis-os-v${_aegis_os_ver}-x86_64-unknown-linux-gnu.tar.gz"
+)
+source_aarch64=(
+  "aegis-os-v${_aegis_os_ver}-aarch64-unknown-linux-gnu.tar.gz::https://github.com/heurion-org/aegis-os/releases/download/v${_aegis_os_ver}/aegis-os-v${_aegis_os_ver}-aarch64-unknown-linux-gnu.tar.gz"
+)
+# Run `updpkgsums` (pacman-contrib) before publishing a tagged release to AUR.
+sha256sums=('SKIP' 'SKIP')
+sha256sums_x86_64=('SKIP')
+sha256sums_aarch64=('SKIP')
+
+prepare() {
+  cd "${srcdir}/aegis-desktop-desktop-v${pkgver}"
+  mkdir -p apps/desktop/src-tauri/binaries
+  install -Dm755 "${srcdir}/aegis-os" "apps/desktop/src-tauri/binaries/aegis-os-${CARCH}-unknown-linux-gnu"
+  pnpm install --frozen-lockfile
+}
+
+build() {
+  cd "${srcdir}/aegis-desktop-desktop-v${pkgver}"
+  export CARGO_TARGET_DIR="${srcdir}/aegis-desktop-desktop-v${pkgver}/target"
+  pnpm -r typecheck
+  pnpm -r test
+  pnpm --filter @aegis/desktop build
+  cargo build --release --manifest-path apps/desktop/src-tauri/Cargo.toml
+}
+
+package() {
+  cd "${srcdir}/aegis-desktop-desktop-v${pkgver}"
+  # Install binary and sidecar together under /usr/lib/aegis-desktop so Tauri's
+  # `sidecar("aegis-os")` resolves alongside /proc/self/exe without colliding with /usr/bin/aegis-os.
+  install -Dm755 "target/release/aegis-desktop" "${pkgdir}/usr/lib/aegis-desktop/aegis-desktop"
+  install -Dm755 "apps/desktop/src-tauri/binaries/aegis-os-${CARCH}-unknown-linux-gnu" \
+    "${pkgdir}/usr/lib/aegis-desktop/aegis-os"
+  install -dm755 "${pkgdir}/usr/bin"
+  ln -s /usr/lib/aegis-desktop/aegis-desktop "${pkgdir}/usr/bin/aegis-desktop"
+  install -Dm644 "${srcdir}/aegis-desktop.desktop" \
+    "${pkgdir}/usr/share/applications/aegis-desktop.desktop"
+}

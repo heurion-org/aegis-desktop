@@ -65,11 +65,11 @@ jobs:
           AEGIS_OS_TAG: ${{ inputs.aegis_os_tag || 'v0.12.1' }}
         run: |
           mkdir -p apps/desktop/src-tauri/binaries
-          ASSET="aegis-os-${{ matrix.target }}.tar.gz"
+          ASSET="aegis-os-${AEGIS_OS_TAG}-${{ matrix.target }}.tar.gz"
           BASE_URL="https://github.com/${{ github.repository_owner }}/aegis-os/releases/download/${AEGIS_OS_TAG}"
           curl -fsSL "${BASE_URL}/${ASSET}" -o "/tmp/${ASSET}"
-          curl -fsSL "${BASE_URL}/${ASSET}.sha256" -o "/tmp/${ASSET}.sha256"
-          (cd /tmp && sha256sum -c "${ASSET}.sha256")
+          curl -fsSL "${BASE_URL}/SHA256SUMS" -o /tmp/SHA256SUMS
+          (cd /tmp && grep "  ${ASSET}\$" SHA256SUMS | sha256sum -c -)
           tar -xzf "/tmp/${ASSET}" -C /tmp
           cp /tmp/aegis-os "apps/desktop/src-tauri/binaries/aegis-os-${{ matrix.target }}"
           chmod +x "apps/desktop/src-tauri/binaries/aegis-os-${{ matrix.target }}"
