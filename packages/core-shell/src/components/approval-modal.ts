@@ -7,16 +7,25 @@ export interface ApprovalPanelOptions {
   onDecided?: () => void | Promise<void>
 }
 
+export function filterPendingEscalations(
+  escalations: PendingEscalation[],
+): PendingEscalation[] {
+  return escalations.filter(
+    e => !e.status || e.status.trim().toLowerCase() === 'pending',
+  )
+}
+
 export function renderApprovalPanel(opts: ApprovalPanelOptions): void {
-  const { container, escalations, client, onDecided } = opts
+  const { container, client, onDecided } = opts
+  const pending = filterPendingEscalations(opts.escalations)
   container.innerHTML = ''
 
   const head = document.createElement('div')
   head.className = 'aos-panel-header'
-  head.innerHTML = `<span>Policy Approvals</span><small>${escalations.length}</small>`
+  head.innerHTML = `<span>Policy Approvals</span><small>${pending.length}</small>`
   container.appendChild(head)
 
-  if (escalations.length === 0) {
+  if (pending.length === 0) {
     const empty = document.createElement('div')
     empty.className = 'aos-muted'
     empty.textContent = 'No pending egress or sandbox escalations.'
@@ -26,7 +35,7 @@ export function renderApprovalPanel(opts: ApprovalPanelOptions): void {
 
   const list = document.createElement('div')
   list.className = 'aos-approval-list'
-  for (const item of escalations) {
+  for (const item of pending) {
     const card = document.createElement('div')
     card.className = 'aos-approval-card'
 

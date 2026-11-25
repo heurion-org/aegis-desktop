@@ -1,5 +1,5 @@
 import { renderAgentOnboarding } from './agent-onboarding.ts'
-import { renderApprovalPanel } from './approval-modal.ts'
+import { filterPendingEscalations, renderApprovalPanel } from './approval-modal.ts'
 import type { OnboardingIntent } from './onboarding-wizard.ts'
 import { TaskStreamController, type TaskArtifactRef } from './task-stream.ts'
 import { renderWorkspaceTree, upsertSyncRule } from './workspace-tree.ts'
@@ -341,19 +341,20 @@ export class AegisCoreShell {
   }
 
   private syncEscalationState(next: PendingEscalation[], notifyNew: boolean): boolean {
+    const pendingNext = filterPendingEscalations(next)
     const prevIds = this.escalations.map(e => e.escalation_id).join(',')
-    const nextIds = next.map(e => e.escalation_id).join(',')
+    const nextIds = pendingNext.map(e => e.escalation_id).join(',')
     if (notifyNew) {
-      for (const esc of next) {
+      for (const esc of pendingNext) {
         if (!this.knownEscalationIds.has(esc.escalation_id)) {
           this.opts.onNewEscalation?.(esc)
         }
       }
     }
-    for (const esc of next) {
+    for (const esc of pendingNext) {
       this.knownEscalationIds.add(esc.escalation_id)
     }
-    this.escalations = next
+    this.escalations = pendingNext
     return prevIds !== nextIds
   }
 
@@ -745,6 +746,26 @@ export class AegisCoreShell {
 
     bar.append(left, right)
     host.appendChild(bar)
+
+    if (isCowShadow && !this.activeRepo && !ws.is_git_repo && childRepos.length > 0) {
+      const pickRow = document.createElement('div')
+      pickRow.className = 'aos-repo-chips'
+      const lbl = document.createElement('small')
+      lbl.className = 'aos-muted'
+      lbl.textContent = 'Scope to repo:'
+      pickRow.appendChild(lbl)
+      for (const repo of childRepos.slice(0, 6)) {
+        const chip = document.createElement('button')
+        chip.type = 'button'
+        chip.className = 'aos-pill'
+        chip.textContent = repo.branch ? `${repo.name} (${repo.branch})` : repo.name
+        chip.onclick = () => {
+          void this.selectRepo(repo.rel_path)
+        }
+        pickRow.appendChild(chip)
+      }
+      host.appendChild(pickRow)
+    }
 
     if (this.vcsFeedback) {
       const fb = document.createElement('div')
@@ -1293,6 +1314,8 @@ export class AegisCoreShell {
         workspaceId: wsId,
         workspaceName: this.activeWorkspace.name,
         activeRepo: this.activeRepo,
+        workspaceIsGitRepo: Boolean(this.activeWorkspace.is_git_repo),
+        childRepos: this.activeWorkspace.child_repos ?? [],
         agents: this.agents,
         activeFilePath: this.selectedFile?.path ?? null,
         workspaceFiles: this.treeEntries,

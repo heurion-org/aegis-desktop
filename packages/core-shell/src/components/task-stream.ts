@@ -4,6 +4,7 @@ import { escapeHtml, renderChatMarkdownHtml } from '../markdown.ts'
 import {
   MIN_RECOMMENDED_DAEMON_VERSION,
   type AegisDaemonClient,
+  type ChildRepoSummary,
   type DesktopAgentStatus,
   type DesktopTaskRecord,
   type DesktopTaskStep,
@@ -22,6 +23,8 @@ export interface TaskStreamOptions {
   workspaceId: string | null
   workspaceName?: string | null
   activeRepo?: string | null
+  workspaceIsGitRepo?: boolean
+  childRepos?: ChildRepoSummary[]
   agents: DesktopAgentStatus[]
   activeFilePath: string | null
   workspaceFiles?: WorkspaceTreeEntry[]
@@ -113,6 +116,65 @@ const ROLE_STARTERS: Record<AgentRole, readonly StarterPromptItem[]> = {
 }
 
 const CONTEXT_PREFIX_RE = /^\[Workspace context files:\s*([^\]]+)\]\r?\n\r?\n([\s\S]*)$/
+
+/**
+ * Narrows umbrella multi-repo workspaces to a single child repository when `activeRepo`
+ * is unset and either all attached `@file` references live in one child repo or there
+ * is only one child repository.
+ */
+export function resolveTaskRepoScope(
+  childRepos: ChildRepoSummary[],
+  isGitRepo: boolean,
+  activeRepo: string | null | undefined,
+  docRefs: string[],
+): { repo: string | null; docRefs: string[] } {
+  const explicit = activeRepo?.trim()
+  if (explicit) {
+    return { repo: explicit, docRefs }
+  }
+  if (isGitRepo || childRepos.length === 0) {
+    return { repo: null, docRefs }
+  }
+  const normalizedRepos = Array.from(
+    new Set(
+      childRepos
+        .map(r => r.rel_path.trim().replace(/^\.\//, '').replace(/\/+$/, ''))
+        .filter(Boolean),
+    ),
+  ).sort((a, b) => b.length - a.length)
+
+  if (normalizedRepos.length === 0) {
+    return { repo: null, docRefs }
+  }
+
+  const cleanedRefs = docRefs
+    .map(r => r.trim().replace(/^@/, '').replace(/^\.\//, '').replace(/^\/+/, ''))
+    .filter(Boolean)
+
+  if (cleanedRefs.length === 0) {
+    return normalizedRepos.length === 1
+      ? { repo: normalizedRepos[0]!, docRefs }
+      : { repo: null, docRefs }
+  }
+
+  let matchedRepo: string | null = null
+  const strippedRefs: string[] = []
+  for (const ref of cleanedRefs) {
+    const found = normalizedRepos.find(
+      rel => ref === rel || ref.startsWith(`${rel}/`),
+    )
+    if (!found) {
+      return { repo: null, docRefs }
+    }
+    if (matchedRepo && matchedRepo !== found) {
+      return { repo: null, docRefs }
+    }
+    matchedRepo = found
+    strippedRefs.push(ref === found ? '.' : ref.slice(found.length + 1))
+  }
+
+  return matchedRepo ? { repo: matchedRepo, docRefs: strippedRefs } : { repo: null, docRefs }
+}
 
 /**
  * Formats `@file` context references into the prompt payload so CLI agents run by
@@ -670,15 +732,20 @@ export class TaskStreamController {
       this.submitError = ''
       this.renderErrorBanner()
       submitBtn.disabled = true
-      const docRefs = [...effectiveRefs]
-      const fullPrompt = buildTaskPromptWithRefs(rawPrompt, docRefs)
+      const scoped = resolveTaskRepoScope(
+        this.opts.childRepos ?? [],
+        Boolean(this.opts.workspaceIsGitRepo),
+        activeRepo ?? null,
+        [...effectiveRefs],
+      )
+      const fullPrompt = buildTaskPromptWithRefs(rawPrompt, scoped.docRefs)
       try {
         const created = await this.opts.client.startTask(workspaceId, {
           role: this.role,
           agent_override: this.overrideAgentId || null,
-          repo: activeRepo ?? null,
+          repo: scoped.repo,
           prompt: fullPrompt,
-          doc_refs: docRefs,
+          doc_refs: scoped.docRefs,
         })
         this.draftText = ''
         this.opts.onDraftChanged?.('')

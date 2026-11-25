@@ -18,10 +18,12 @@ import {
 } from '../src/entitlements.ts'
 import { selectAgentForRole } from '../src/roles.ts'
 import { filterTreeEntries, upsertSyncRule } from '../src/components/workspace-tree.ts'
+import { filterPendingEscalations } from '../src/components/approval-modal.ts'
 import {
   buildTaskPromptWithRefs,
   extractTaskPrimaryOutput,
   parseTaskPromptDisplay,
+  resolveTaskRepoScope,
 } from '../src/components/task-stream.ts'
 import { brandMarkSvg, iconHtml } from '../src/icons.ts'
 import { renderChatMarkdownHtml } from '../src/markdown.ts'
@@ -432,6 +434,49 @@ test('AegisDaemonClient sends DELETE /v1/workspaces/:id on removeWorkspace', asy
   assert.equal(seen[0]?.method, 'DELETE')
   assert.equal(seen[0]?.auth, 'Bearer aht_tok')
   assert.match(seen[0]?.url ?? '', /\/v1\/workspaces\/ws_123$/)
+})
+
+test('filterPendingEscalations retains only pending items', () => {
+  const sample = [
+    { escalation_id: 'esc-1', org_id: 'personal', agent_id: 'a1', action: 'workspace_git', target_resource: 'r1', reason: 'ok', status: 'approved', created_at_ms: 1 },
+    { escalation_id: 'esc-2', org_id: 'personal', agent_id: 'a1', action: 'pkg_install', target_resource: 'r2', reason: 'wait', status: 'pending', created_at_ms: 2 },
+    { escalation_id: 'esc-3', org_id: 'personal', agent_id: 'a1', action: 'fs_import_file', target_resource: 'r3', reason: 'wait2', status: 'Pending', created_at_ms: 3 },
+    { escalation_id: 'esc-4', org_id: 'personal', agent_id: 'a1', action: 'workspace_commit', target_resource: 'r4', reason: 'no', status: 'denied', created_at_ms: 4 },
+  ]
+  const filtered = filterPendingEscalations(sample)
+  assert.deepEqual(filtered.map(e => e.escalation_id), ['esc-2', 'esc-3'])
+})
+
+test('resolveTaskRepoScope auto-scopes umbrella multi-repo refs cleanly', () => {
+  const repos = [
+    { name: 'aegis-desktop', rel_path: 'aegis-desktop', path: '/ws/aegis-desktop', branch: 'main' },
+    { name: 'aegis-os', rel_path: 'aegis-os', path: '/ws/aegis-os', branch: 'main' },
+  ]
+
+  assert.deepEqual(
+    resolveTaskRepoScope(repos, false, null, ['aegis-desktop/README.md']),
+    { repo: 'aegis-desktop', docRefs: ['README.md'] },
+  )
+
+  assert.deepEqual(
+    resolveTaskRepoScope(repos, false, null, ['aegis-desktop/README.md', 'aegis-os/Cargo.toml']),
+    { repo: null, docRefs: ['aegis-desktop/README.md', 'aegis-os/Cargo.toml'] },
+  )
+
+  assert.deepEqual(
+    resolveTaskRepoScope(repos, false, 'aegis-os', ['README.md']),
+    { repo: 'aegis-os', docRefs: ['README.md'] },
+  )
+
+  assert.deepEqual(
+    resolveTaskRepoScope([repos[0]!], false, null, []),
+    { repo: 'aegis-desktop', docRefs: [] },
+  )
+
+  assert.deepEqual(
+    resolveTaskRepoScope(repos, true, null, ['aegis-desktop/README.md']),
+    { repo: null, docRefs: ['aegis-desktop/README.md'] },
+  )
 })
 
 
