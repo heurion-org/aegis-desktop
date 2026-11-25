@@ -4,6 +4,34 @@ Tauri v2 + Vanilla Vite/TypeScript desktop workbench for **Aegis OS** — combin
 
 ---
 
+## Quick Install (One Command — macOS & Linux)
+
+Similar to Homebrew, install **Aegis Desktop** on **macOS** (Apple Silicon & Intel) or **Linux** (Ubuntu/Debian, Arch Linux, Fedora) with a single command:
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/heurion-org/aegis-desktop/main/install.sh)"
+```
+
+What [`install.sh`](install.sh) handles automatically:
+- Detects your OS, CPU architecture (`x86_64` / `aarch64`), and Linux distro (`debian` / `arch` / `fedora`).
+- Installs the matching pre-built release (`.dmg` on macOS, `.deb` + `bubblewrap` on Debian/Ubuntu, `.AppImage` + runtime deps on Arch/Fedora, automatically handling `--appimage-extract-and-run` if `libfuse2` is absent).
+- If no pre-built release tag is published yet (or when `--from-source` is passed), automatically installs platform dependencies, bundles the verified `aegis-os` sidecar, builds from source, and creates `aegis-desktop` + `.desktop` menu entry.
+
+Useful installer flags:
+
+```bash
+# Preview the install plan without modifying your system
+curl -fsSL https://raw.githubusercontent.com/heurion-org/aegis-desktop/main/install.sh | bash -s -- --dry-run
+
+# Force building the latest main branch from source non-interactively
+NONINTERACTIVE=1 curl -fsSL https://raw.githubusercontent.com/heurion-org/aegis-desktop/main/install.sh | bash -s -- --from-source
+
+# Uninstall user/local installation
+curl -fsSL https://raw.githubusercontent.com/heurion-org/aegis-desktop/main/install.sh | bash -s -- --uninstall
+```
+
+---
+
 ## Overview
 
 - **Core Shell (`packages/core-shell`)**: Authenticated `AegisDaemonClient`, 3-layer Org/Workspace/Repo selector, BYO CLI agent onboarding (`opencode`, `claude`, `codex`, `agy`), role-based routing (`coder | writer | analyst | reviewer`), selective `SyncPolicy` workspace tree (`local_only` vs `cloud_sync`), `+ @File / @Artifact` multi-reference Task Stream composer, and live 5s Approval Inbox polling.
@@ -176,6 +204,7 @@ pnpm --filter @aegis/desktop tauri build
 
 ```text
 aegis-desktop/
+├── install.sh               # Unified Homebrew-style macOS/Linux installer
 ├── packaging/
 │   └── arch/                # Arch Linux PKGBUILD & .desktop entry
 ├── packages/
