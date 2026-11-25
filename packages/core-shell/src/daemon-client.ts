@@ -97,6 +97,9 @@ export interface WorkspaceTreeResponse {
 
 export interface WorkspaceDiffResponse {
   repo?: string | null
+  source?: 'cow_shadow' | 'git' | string
+  session_id?: string | null
+  evidence_hash?: string | null
   is_git_repo?: boolean
   changed_files: string[]
   diff_text: string
@@ -105,6 +108,8 @@ export interface WorkspaceDiffResponse {
 export interface WorkspaceCommitResponse {
   ok: boolean
   committed: boolean
+  source?: string
+  session_id?: string | null
   repo?: string | null
   commit_hash?: string | null
   summary: string
@@ -112,6 +117,8 @@ export interface WorkspaceCommitResponse {
 
 export interface WorkspaceRollbackResponse {
   ok: boolean
+  source?: string
+  session_id?: string | null
   repo?: string | null
   restored_paths: string[]
 }
@@ -132,6 +139,8 @@ export interface DesktopTaskRecord {
   resolved_agent: string
   prompt: string
   status: 'queued' | 'running' | 'completed' | 'failed'
+  enforcement?: string
+  session_id?: string | null
   steps: DesktopTaskStep[]
   created_at: string
 }
@@ -275,7 +284,14 @@ export class AegisDaemonClient {
 
   commitWorkspace(
     workspaceId: string,
-    input: { repo?: string | null; message?: string; paths?: string[] } = {},
+    input: {
+      repo?: string | null
+      message?: string
+      paths?: string[]
+      session_id?: string | null
+      expected_diff_hash?: string | null
+      allow_sensitive?: boolean
+    } = {},
   ): Promise<WorkspaceCommitResponse> {
     return this.request(`/v1/workspaces/${encodeURIComponent(workspaceId)}/commit`, {
       method: 'POST',
@@ -285,7 +301,7 @@ export class AegisDaemonClient {
 
   rollbackWorkspace(
     workspaceId: string,
-    input: { repo?: string | null; paths?: string[] } = {},
+    input: { repo?: string | null; paths?: string[]; session_id?: string | null } = {},
   ): Promise<WorkspaceRollbackResponse> {
     return this.request(`/v1/workspaces/${encodeURIComponent(workspaceId)}/rollback`, {
       method: 'POST',
@@ -319,6 +335,7 @@ export class AegisDaemonClient {
       repo?: string | null
       prompt: string
       doc_refs?: string[]
+      enforcement?: 'enforced' | 'advisory' | 'isolated' | 'direct'
     },
   ): Promise<DesktopTaskRecord> {
     const res = await this.request<{ task: DesktopTaskRecord }>(

@@ -137,11 +137,12 @@ export function parseTaskPromptDisplay(rawPrompt: string): { refs: string[]; bod
 }
 
 /**
- * Extracts the primary assistant output from a finished or failed task so the Workstream
- * renders the final answer visibly instead of hiding it inside collapsed execution details.
+ * Extracts live streamed chunks and final assistant output from a task so the Workstream
+ * renders streaming text as it arrives and final answers visibly in Markdown.
  */
 export function extractTaskPrimaryOutput(task: DesktopTaskRecord): {
   text: string
+  streamingText: string
   isError: boolean
   traceSteps: DesktopTaskStep[]
 } {
@@ -153,9 +154,16 @@ export function extractTaskPrimaryOutput(task: DesktopTaskRecord): {
       break
     }
   }
-  const text = terminal ? (terminal.raw_log?.trim() || terminal.detail?.trim() || '') : ''
+  const streamedChunks = task.steps
+    .filter(s => s.kind === 'output' && Boolean(s.raw_log?.trim()))
+    .map(s => s.raw_log!.trimEnd())
+  const streamingText = streamedChunks.join('\n').trim()
+  const text = terminal
+    ? terminal.raw_log?.trim() || streamingText || terminal.detail?.trim() || ''
+    : ''
   return {
     text,
+    streamingText,
     isError: task.status === 'failed',
     traceSteps: task.steps,
   }
@@ -336,6 +344,20 @@ export class TaskStreamController {
       roleSpan.textContent = task.role
       metaLeft.append(agentEl, roleSpan)
 
+      const sessionStep = task.steps.find(s => s.kind === 'session_started')
+      const sessionId =
+        task.session_id ??
+        sessionStep?.summary.match(/(ses_[A-Za-z0-9]+)/)?.[1] ??
+        null
+      if (task.enforcement || sessionId) {
+        const enfBadge = document.createElement('span')
+        enfBadge.className = 'aos-badge info'
+        const labelParts = [task.enforcement ?? 'enforced']
+        if (sessionId) labelParts.push(sessionId.slice(0, 12))
+        enfBadge.innerHTML = `${iconHtml('shield')}<span>${escapeHtml(labelParts.join(' · '))}</span>`
+        metaLeft.appendChild(enfBadge)
+      }
+
       const statusBadge = document.createElement('span')
       const statusCls =
         task.status === 'completed' ? 'ok' : task.status === 'failed' ? 'warn' : 'info'
@@ -383,6 +405,13 @@ export class TaskStreamController {
           warnEl.innerHTML = `${iconHtml('alertTriangle')}<span>Sidecar is older than v0.12.1 and keeps tasks queued. Upgrade aegis-os to run prompts live.</span>`
           answerBox.appendChild(warnEl)
         }
+
+        if (output.streamingText) {
+          const streamHost = document.createElement('div')
+          streamHost.className = 'aos-task-markdown'
+          streamHost.innerHTML = renderChatMarkdownHtml(output.streamingText)
+          answerBox.appendChild(streamHost)
+        }
       } else if (output.text) {
         const mdHost = document.createElement('div')
         mdHost.className = `aos-task-markdown ${output.isError ? 'is-error' : ''}`
@@ -424,7 +453,12 @@ export class TaskStreamController {
             detailEl.textContent = s.detail
             li.appendChild(detailEl)
           }
-          if (s.raw_log && s.raw_log.trim().length > 0 && s.raw_log.trim() !== output.text) {
+          if (
+            s.raw_log &&
+            s.raw_log.trim().length > 0 &&
+            s.raw_log.trim() !== output.text &&
+            s.kind !== 'output'
+          ) {
             const pre = document.createElement('pre')
             pre.textContent = s.raw_log
             li.appendChild(pre)

@@ -14,25 +14,25 @@ export const ROLE_CATALOG: RoleDescriptor[] = [
     id: 'coder',
     label: 'Coder',
     description: 'Builds features, refactors modules, and verifies tests inside CoW isolation.',
-    preferredAgents: ['opencode', 'claude', 'agy'],
+    preferredAgents: ['opencode', 'claude', 'codex', 'agy'],
   },
   {
     id: 'writer',
     label: 'Writer',
     description: 'Drafts Markdown locally or edits Dual-Surface CRDT docs & slides in Cloud Pro.',
-    preferredAgents: ['claude', 'opencode', 'agy'],
+    preferredAgents: ['claude', 'opencode', 'codex', 'agy'],
   },
   {
     id: 'analyst',
     label: 'Analyst',
     description: 'Queries datasets, verifies numbers, and prepares data artifacts for docs.',
-    preferredAgents: ['opencode', 'claude', 'agy'],
+    preferredAgents: ['opencode', 'claude', 'codex', 'agy'],
   },
   {
     id: 'reviewer',
     label: 'Reviewer',
     description: 'Audits diffs, citations, security rules, and merge readiness.',
-    preferredAgents: ['claude', 'opencode', 'agy'],
+    preferredAgents: ['claude', 'codex', 'opencode', 'agy'],
   },
 ]
 

@@ -115,6 +115,10 @@ test('selectAgentForRole routes flat DesktopAgentStatus (writer -> claude, coder
   assert.equal(selectAgentForRole('coder', agents).selectedAgentId, 'opencode')
   assert.equal(selectAgentForRole('writer', agents).selectedAgentId, 'claude')
   assert.equal(selectAgentForRole('writer', agents, 'agy').ready, false)
+
+  const withCodex = [mkAgent('codex', true, true), mkAgent('agy', true, false)]
+  assert.equal(selectAgentForRole('reviewer', withCodex).selectedAgentId, 'codex')
+  assert.equal(selectAgentForRole('coder', withCodex, 'codex').ready, true)
 })
 
 test('AegisDaemonClient matches Rust wire shapes for agents, sync-policy, 3-layer workspaces, git ops, tasks, and approvals', async () => {
@@ -353,6 +357,62 @@ test('task prompt context attachment and primary output extraction work cleanly'
   const out2 = extractTaskPrimaryOutput(failedHintTask)
   assert.equal(out2.text, 'Install claude first')
   assert.equal(out2.isError, true)
+
+  const streamingTask: DesktopTaskRecord = {
+    ...completedTask,
+    status: 'running',
+    enforcement: 'enforced',
+    session_id: 'ses_live123',
+    steps: [
+      { seq: 1, kind: 'started', summary: 'Started', detail: null, raw_log: null, timestamp: 't1' },
+      { seq: 2, kind: 'session_started', summary: 'CoW (ses_live123)', detail: null, raw_log: null, timestamp: 't2' },
+      { seq: 3, kind: 'output', summary: 'First chunk', detail: null, raw_log: 'Line 1', timestamp: 't3' },
+      { seq: 4, kind: 'output', summary: 'Second chunk', detail: null, raw_log: 'Line 2', timestamp: 't4' },
+    ],
+  }
+  const outLive = extractTaskPrimaryOutput(streamingTask)
+  assert.equal(outLive.streamingText, 'Line 1\nLine 2')
+  assert.equal(outLive.text, '')
+
+  const completedStreamTask: DesktopTaskRecord = {
+    ...streamingTask,
+    status: 'completed',
+    steps: [
+      ...streamingTask.steps,
+      { seq: 5, kind: 'completed', summary: 'Done', detail: 'Line 1', raw_log: null, timestamp: 't5' },
+    ],
+  }
+  const outMerged = extractTaskPrimaryOutput(completedStreamTask)
+  assert.equal(outMerged.text, 'Line 1\nLine 2')
+})
+
+test('AegisDaemonClient sends CoW session_id and expected_diff_hash on commit and rollback', async () => {
+  const bodies: Array<{ url: string; body: Record<string, unknown> }> = []
+  const client = new AegisDaemonClient(
+    { protocol: 'aos-desktop/v1', port: 43123, base_url: 'http://127.0.0.1:43123', human_token: 'aht_tok' },
+    async (input, init) => {
+      bodies.push({
+        url: input,
+        body: JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>,
+      })
+      if (input.endsWith('/commit')) {
+        return new Response(JSON.stringify({ ok: true, committed: true, source: 'cow_shadow', session_id: 'ses_123', summary: 'Landed' }))
+      }
+      return new Response(JSON.stringify({ ok: true, source: 'cow_shadow', session_id: 'ses_123', restored_paths: ['a.md'] }))
+    },
+  )
+
+  const commitRes = await client.commitWorkspace('ws_1', {
+    session_id: 'ses_123',
+    expected_diff_hash: 'sha256:abcd',
+  })
+  assert.equal(commitRes.source, 'cow_shadow')
+  assert.equal(bodies[0]?.body.session_id, 'ses_123')
+  assert.equal(bodies[0]?.body.expected_diff_hash, 'sha256:abcd')
+
+  const rbRes = await client.rollbackWorkspace('ws_1', { session_id: 'ses_123' })
+  assert.equal(rbRes.session_id, 'ses_123')
+  assert.equal(bodies[1]?.body.session_id, 'ses_123')
 })
 
 

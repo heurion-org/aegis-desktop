@@ -546,7 +546,9 @@ export class AegisCoreShell {
     const scopeLabel = this.activeRepo ?? ws.name
     const changedFiles = diff?.changed_files ?? []
     const isGit = diff?.is_git_repo ?? false
-    const needsRepoPick = !this.activeRepo && childRepos.length > 0 && diff !== null && !isGit
+    const isCowShadow = diff?.source === 'cow_shadow' && Boolean(diff.session_id)
+    const needsRepoPick =
+      !isCowShadow && !this.activeRepo && childRepos.length > 0 && diff !== null && !isGit
 
     const bar = document.createElement('div')
     bar.className = 'aos-ws-status-bar'
@@ -568,6 +570,16 @@ export class AegisCoreShell {
     cliPill.innerHTML = `${iconHtml('terminal')}<span>${readyClis}/${this.agents.length} CLIs</span>`
 
     left.append(scopePill, sandboxPill, cliPill)
+
+    if (isCowShadow && diff?.session_id) {
+      const cowPill = document.createElement('span')
+      cowPill.className = 'aos-badge info'
+      cowPill.title = diff.evidence_hash
+        ? `CoW Shadow Evidence ${diff.evidence_hash}`
+        : `CoW Shadow Session ${diff.session_id}`
+      cowPill.innerHTML = `${iconHtml('shield')}<span>CoW ${escapeHtml(diff.session_id.slice(0, 12))}</span>`
+      left.appendChild(cowPill)
+    }
 
     const right = document.createElement('div')
     right.className = 'aos-ws-status-group'
@@ -594,10 +606,14 @@ export class AegisCoreShell {
       const changeBadge = document.createElement('span')
       changeBadge.className = `aos-badge ${changedFiles.length > 0 ? 'warn' : 'ok'}`
       changeBadge.textContent =
-        changedFiles.length > 0 ? `${changedFiles.length} changed` : 'Clean'
+        changedFiles.length > 0
+          ? isCowShadow
+            ? `${changedFiles.length} CoW staged`
+            : `${changedFiles.length} changed`
+          : 'Clean'
       left.appendChild(changeBadge)
 
-      if (isGit) {
+      if (isCowShadow || isGit) {
         const diffBtn = document.createElement('button')
         diffBtn.type = 'button'
         diffBtn.className = `aos-btn aos-btn-sm ${this.diffExpanded ? 'aos-btn-primary' : ''}`
@@ -607,29 +623,69 @@ export class AegisCoreShell {
           this.renderVcsBarOnly()
         }
 
-        const commitBtn = document.createElement('button')
-        commitBtn.type = 'button'
-        commitBtn.className = `aos-btn aos-btn-sm ${this.commitFormOpen ? 'aos-btn-primary' : ''}`
-        commitBtn.innerHTML = `${iconHtml('check')}<span>Commit</span>`
-        commitBtn.disabled = changedFiles.length === 0
-        commitBtn.onclick = () => {
-          this.commitFormOpen = !this.commitFormOpen
-          this.rollbackConfirmOpen = false
-          this.renderVcsBarOnly()
-        }
+        if (isCowShadow && diff.session_id) {
+          const landBtn = document.createElement('button')
+          landBtn.type = 'button'
+          landBtn.className = 'aos-btn aos-btn-sm aos-btn-primary'
+          landBtn.innerHTML = `${iconHtml('check')}<span>Land to Host</span>`
+          landBtn.disabled = changedFiles.length === 0
+          landBtn.onclick = async () => {
+            landBtn.disabled = true
+            try {
+              const res = await this.opts.client.commitWorkspace(ws.id, {
+                repo: this.activeRepo,
+                session_id: diff.session_id,
+                expected_diff_hash: diff.evidence_hash,
+              })
+              this.diffExpanded = false
+              this.rollbackConfirmOpen = false
+              this.vcsFeedback = res.summary || 'Landed CoW shadow changes to host.'
+              await this.reloadTree()
+            } catch (err) {
+              this.vcsFeedback = err instanceof Error ? err.message : String(err)
+              this.renderVcsBarOnly()
+            } finally {
+              landBtn.disabled = false
+            }
+          }
 
-        const rollbackBtn = document.createElement('button')
-        rollbackBtn.type = 'button'
-        rollbackBtn.className = `aos-btn aos-btn-sm ${this.rollbackConfirmOpen ? 'aos-btn-primary' : ''}`
-        rollbackBtn.innerHTML = `${iconHtml('undo')}<span>Rollback</span>`
-        rollbackBtn.disabled = changedFiles.length === 0
-        rollbackBtn.onclick = () => {
-          this.rollbackConfirmOpen = !this.rollbackConfirmOpen
-          this.commitFormOpen = false
-          this.renderVcsBarOnly()
-        }
+          const discardBtn = document.createElement('button')
+          discardBtn.type = 'button'
+          discardBtn.className = `aos-btn aos-btn-sm ${this.rollbackConfirmOpen ? 'aos-btn-primary' : ''}`
+          discardBtn.innerHTML = `${iconHtml('undo')}<span>Discard Shadow</span>`
+          discardBtn.disabled = changedFiles.length === 0
+          discardBtn.onclick = () => {
+            this.rollbackConfirmOpen = !this.rollbackConfirmOpen
+            this.commitFormOpen = false
+            this.renderVcsBarOnly()
+          }
 
-        right.append(diffBtn, commitBtn, rollbackBtn)
+          right.append(diffBtn, landBtn, discardBtn)
+        } else {
+          const commitBtn = document.createElement('button')
+          commitBtn.type = 'button'
+          commitBtn.className = `aos-btn aos-btn-sm ${this.commitFormOpen ? 'aos-btn-primary' : ''}`
+          commitBtn.innerHTML = `${iconHtml('check')}<span>Commit</span>`
+          commitBtn.disabled = changedFiles.length === 0
+          commitBtn.onclick = () => {
+            this.commitFormOpen = !this.commitFormOpen
+            this.rollbackConfirmOpen = false
+            this.renderVcsBarOnly()
+          }
+
+          const rollbackBtn = document.createElement('button')
+          rollbackBtn.type = 'button'
+          rollbackBtn.className = `aos-btn aos-btn-sm ${this.rollbackConfirmOpen ? 'aos-btn-primary' : ''}`
+          rollbackBtn.innerHTML = `${iconHtml('undo')}<span>Rollback</span>`
+          rollbackBtn.disabled = changedFiles.length === 0
+          rollbackBtn.onclick = () => {
+            this.rollbackConfirmOpen = !this.rollbackConfirmOpen
+            this.commitFormOpen = false
+            this.renderVcsBarOnly()
+          }
+
+          right.append(diffBtn, commitBtn, rollbackBtn)
+        }
       }
     }
 
@@ -701,20 +757,25 @@ export class AegisCoreShell {
       const confirmBar = document.createElement('div')
       confirmBar.className = 'aos-commit-inline-bar is-warn'
       const msg = document.createElement('span')
-      msg.textContent = `Discard ${changedFiles.length} uncommitted change(s) in ${scopeLabel}?`
+      msg.textContent = isCowShadow
+        ? `Discard ${changedFiles.length} CoW shadow change(s) (${diff?.session_id ?? ''})?`
+        : `Discard ${changedFiles.length} uncommitted change(s) in ${scopeLabel}?`
       const confirmBtn = document.createElement('button')
       confirmBtn.type = 'button'
       confirmBtn.className = 'aos-btn aos-btn-sm aos-btn-primary'
-      confirmBtn.innerHTML = `${iconHtml('undo')}<span>Confirm Rollback</span>`
+      confirmBtn.innerHTML = `${iconHtml('undo')}<span>${isCowShadow ? 'Confirm Discard' : 'Confirm Rollback'}</span>`
       confirmBtn.onclick = async () => {
         confirmBtn.disabled = true
         try {
           const res = await this.opts.client.rollbackWorkspace(ws.id, {
             repo: this.activeRepo,
+            session_id: isCowShadow ? diff?.session_id : undefined,
           })
           this.rollbackConfirmOpen = false
           this.diffExpanded = false
-          this.vcsFeedback = `Rolled back ${res.restored_paths.length} path(s).`
+          this.vcsFeedback = isCowShadow
+            ? `Discarded CoW shadow session ${res.session_id ?? ''}.`
+            : `Rolled back ${res.restored_paths.length} path(s).`
           await this.reloadTree()
         } catch (err) {
           this.vcsFeedback = err instanceof Error ? err.message : String(err)
