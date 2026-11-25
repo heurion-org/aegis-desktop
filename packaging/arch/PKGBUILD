@@ -47,7 +47,7 @@ prepare() {
   cd "${srcdir}/aegis-desktop-desktop-v${pkgver}"
   mkdir -p apps/desktop/src-tauri/binaries
   install -Dm755 "${srcdir}/aegis-os" "apps/desktop/src-tauri/binaries/aegis-os-${CARCH}-unknown-linux-gnu"
-  pnpm install --frozen-lockfile
+  pnpm install --frozen-lockfile --ignore-scripts
 }
 
 build() {

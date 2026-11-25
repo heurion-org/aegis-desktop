@@ -617,7 +617,7 @@ install_from_source() {
   if [[ "$DRY_RUN" -eq 1 ]]; then
     info "[dry-run] fetch ${DESKTOP_REPO}@${ref} tarball into temporary directory"
     info "[dry-run] stage sidecar at apps/desktop/src-tauri/binaries/aegis-os-${TARGET_TRIPLE}"
-    info "[dry-run] run: pnpm install --frozen-lockfile && pnpm --filter @aegis/desktop build"
+    info "[dry-run] run: pnpm install --frozen-lockfile --ignore-scripts && pnpm --filter @aegis/desktop build"
     info "[dry-run] run: CARGO_TARGET_DIR=.../target cargo build --release --manifest-path apps/desktop/src-tauri/Cargo.toml"
     info "[dry-run] install binaries under ${HOME}/.local/lib/aegis-desktop and launcher at ${HOME}/.local/bin/aegis-desktop"
     return 0
@@ -636,7 +636,7 @@ install_from_source() {
   (
     cd "$src_dir"
     export CARGO_TARGET_DIR="${src_dir}/target"
-    pnpm install --frozen-lockfile
+    pnpm install --frozen-lockfile --ignore-scripts
     pnpm --filter @aegis/desktop build
     cargo build --release --manifest-path apps/desktop/src-tauri/Cargo.toml
   )
@@ -675,7 +675,11 @@ main() {
 
   confirm_or_continue
 
-  WORK_DIR="$(mktemp -d)"
+  local cache_root="${XDG_CACHE_HOME:-${HOME}/.cache}"
+  if [[ "$DRY_RUN" -eq 0 ]]; then
+    mkdir -p "$cache_root"
+    WORK_DIR="$(mktemp -d "${cache_root}/aegis-desktop-install.XXXXXX")"
+  fi
 
   if [[ "$FROM_SOURCE" -eq 1 ]]; then
     install_from_source
