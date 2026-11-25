@@ -1,4 +1,7 @@
+use std::io::{Read, Write};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
@@ -11,6 +14,13 @@ pub struct DaemonConnection {
     pub port: u16,
     pub base_url: String,
     pub human_token: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DaemonHttpResponse {
+    pub status: u16,
+    pub content_type: String,
+    pub body: String,
 }
 
 #[derive(Clone, Default)]
@@ -202,4 +212,161 @@ impl SidecarManager {
             guard.connection = None;
         }
     }
+
+    /// Proxies authenticated HTTP calls from WebView to `127.0.0.1:{port}` over direct TCP,
+    /// bypassing WebKitGTK cross-origin CORS preflight restrictions cleanly.
+    pub fn http_request(
+        &self,
+        app: &AppHandle,
+        method: &str,
+        path: &str,
+        body: Option<&str>,
+    ) -> Result<DaemonHttpResponse, String> {
+        let method_upper = method.trim().to_ascii_uppercase();
+        if !matches!(
+            method_upper.as_str(),
+            "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
+        ) {
+            return Err(format!("unsupported HTTP method: {method}"));
+        }
+        if !path.starts_with('/') || path.contains('\r') || path.contains('\n') {
+            return Err("invalid daemon request path".to_string());
+        }
+
+        let mut conn = match self.get_connection() {
+            Some(c) => c,
+            None => self.start(app)?,
+        };
+
+        for attempt in 0..2 {
+            match send_loopback_http(&conn, &method_upper, path, body) {
+                Ok(resp) => return Ok(resp),
+                Err(err)
+                    if attempt == 0
+                        && err.kind() == std::io::ErrorKind::ConnectionRefused =>
+                {
+                    self.shutdown();
+                    conn = self.start(app)?;
+                }
+                Err(err) => {
+                    return Err(format!(
+                        "daemon HTTP request {method_upper} {path} failed: {err}"
+                    ));
+                }
+            }
+        }
+
+        Err(format!(
+            "daemon HTTP request {method_upper} {path} failed after sidecar restart"
+        ))
+    }
+}
+
+fn send_loopback_http(
+    conn: &DaemonConnection,
+    method: &str,
+    path: &str,
+    body: Option<&str>,
+) -> std::io::Result<DaemonHttpResponse> {
+    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), conn.port);
+    let mut stream = TcpStream::connect_timeout(&addr, Duration::from_secs(5))?;
+    stream.set_read_timeout(Some(Duration::from_secs(30)))?;
+    stream.set_write_timeout(Some(Duration::from_secs(10)))?;
+
+    let payload = body.unwrap_or("");
+    let has_body = body.is_some();
+    let mut req = format!(
+        "{method} {path} HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nAuthorization: Bearer {}\r\nAccept: application/json\r\nConnection: close\r\n",
+        conn.port, conn.human_token
+    );
+    if has_body {
+        req.push_str(&format!(
+            "Content-Type: application/json\r\nContent-Length: {}\r\n",
+            payload.len()
+        ));
+    }
+    req.push_str("\r\n");
+    if has_body {
+        req.push_str(payload);
+    }
+
+    stream.write_all(req.as_bytes())?;
+    stream.flush()?;
+
+    let mut raw = Vec::new();
+    stream.read_to_end(&mut raw)?;
+    parse_http_response(&raw)
+        .map_err(|msg| std::io::Error::new(std::io::ErrorKind::InvalidData, msg))
+}
+
+fn parse_http_response(raw: &[u8]) -> Result<DaemonHttpResponse, String> {
+    let (head_end, sep_len) = raw
+        .windows(4)
+        .position(|w| w == b"\r\n\r\n")
+        .map(|i| (i, 4))
+        .or_else(|| raw.windows(2).position(|w| w == b"\n\n").map(|i| (i, 2)))
+        .ok_or_else(|| "malformed HTTP response from daemon (missing header terminator)".to_string())?;
+
+    let header_str = std::str::from_utf8(&raw[..head_end])
+        .map_err(|e| format!("invalid UTF-8 headers from daemon: {e}"))?;
+    let mut lines = header_str.lines();
+    let status_line = lines
+        .next()
+        .ok_or_else(|| "empty HTTP status line from daemon".to_string())?;
+    let status: u16 = status_line
+        .split_whitespace()
+        .nth(1)
+        .and_then(|code| code.parse().ok())
+        .ok_or_else(|| format!("unparseable HTTP status line: {status_line}"))?;
+
+    let mut content_type = "application/json".to_string();
+    let mut is_chunked = false;
+    for line in lines {
+        if let Some((name, val)) = line.split_once(':') {
+            let key = name.trim().to_ascii_lowercase();
+            let val = val.trim();
+            if key == "content-type" {
+                content_type = val.to_string();
+            } else if key == "transfer-encoding" && val.to_ascii_lowercase().contains("chunked") {
+                is_chunked = true;
+            }
+        }
+    }
+
+    let raw_body = &raw[head_end + sep_len..];
+    let decoded = if is_chunked {
+        decode_chunked(raw_body)
+    } else {
+        raw_body.to_vec()
+    };
+    let body = String::from_utf8_lossy(&decoded).to_string();
+
+    Ok(DaemonHttpResponse {
+        status,
+        content_type,
+        body,
+    })
+}
+
+fn decode_chunked(data: &[u8]) -> Vec<u8> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < data.len() {
+        let Some(rel_end) = data[i..].windows(2).position(|w| w == b"\r\n") else {
+            break;
+        };
+        let size_line = String::from_utf8_lossy(&data[i..i + rel_end]);
+        let size_hex = size_line.split(';').next().unwrap_or("").trim();
+        let Ok(chunk_len) = usize::from_str_radix(size_hex, 16) else {
+            break;
+        };
+        i += rel_end + 2;
+        if chunk_len == 0 {
+            break;
+        }
+        let end = i.saturating_add(chunk_len).min(data.len());
+        out.extend_from_slice(&data[i..end]);
+        i = end.saturating_add(2);
+    }
+    out
 }

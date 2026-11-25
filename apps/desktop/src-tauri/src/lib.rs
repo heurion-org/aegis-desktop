@@ -1,6 +1,6 @@
 mod sidecar;
 
-use sidecar::{DaemonConnection, SidecarManager};
+use sidecar::{DaemonConnection, DaemonHttpResponse, SidecarManager};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Manager, RunEvent, State};
@@ -18,6 +18,22 @@ async fn get_daemon_connection(
     tauri::async_runtime::spawn_blocking(move || manager.start(&app))
         .await
         .map_err(|e| format!("sidecar startup task aborted: {e}"))?
+}
+
+#[tauri::command]
+async fn daemon_http_request(
+    app: AppHandle,
+    sidecar: State<'_, SidecarManager>,
+    method: String,
+    path: String,
+    body: Option<String>,
+) -> Result<DaemonHttpResponse, String> {
+    let manager = sidecar.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        manager.http_request(&app, &method, &path, body.as_deref())
+    })
+    .await
+    .map_err(|e| format!("daemon HTTP proxy task aborted: {e}"))?
 }
 
 #[tauri::command]
@@ -53,6 +69,7 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             get_daemon_connection,
+            daemon_http_request,
             pick_workspace_folder,
             shutdown_daemon
         ])
@@ -67,7 +84,7 @@ pub fn run() {
             {
                 if let Ok(quit_item) = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>) {
                     if let Ok(menu) = Menu::with_items(app, &[&show_item, &quit_item]) {
-                        let mut tray_builder = TrayIconBuilder::new().menu(&menu);
+                        let mut tray_builder = TrayIconBuilder::new().tooltip("Aegis Desktop").menu(&menu);
                         if let Some(icon) = default_icon {
                             tray_builder = tray_builder.icon(icon);
                         }

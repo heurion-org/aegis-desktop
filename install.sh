@@ -238,20 +238,32 @@ install_linux_desktop_icons() {
   local hicolor="${HOME}/.local/share/icons/hicolor"
 
   if [[ "$DRY_RUN" -eq 1 ]]; then
-    info "[dry-run] install app icons into ${hicolor}/{512x512,128x128,scalable}/apps/aegis-desktop.{png,svg}"
+    info "[dry-run] install app icons into ${hicolor}/{32x32,128x128,256x256,512x512,scalable}/apps/aegis-desktop.{png,svg}"
     return 0
   fi
 
-  mkdir -p "${hicolor}/512x512/apps" "${hicolor}/128x128/apps" "${hicolor}/scalable/apps"
+  mkdir -p \
+    "${hicolor}/32x32/apps" \
+    "${hicolor}/128x128/apps" \
+    "${hicolor}/256x256/apps" \
+    "${hicolor}/512x512/apps" \
+    "${hicolor}/scalable/apps"
+
   if [[ -n "$src_icons_dir" && -d "$src_icons_dir" ]]; then
-    [[ -f "${src_icons_dir}/icon.png" ]] && install -m 644 "${src_icons_dir}/icon.png" "${hicolor}/512x512/apps/aegis-desktop.png"
+    [[ -f "${src_icons_dir}/32x32.png" ]] && install -m 644 "${src_icons_dir}/32x32.png" "${hicolor}/32x32/apps/aegis-desktop.png"
     [[ -f "${src_icons_dir}/128x128.png" ]] && install -m 644 "${src_icons_dir}/128x128.png" "${hicolor}/128x128/apps/aegis-desktop.png"
+    [[ -f "${src_icons_dir}/128x128@2x.png" ]] && install -m 644 "${src_icons_dir}/128x128@2x.png" "${hicolor}/256x256/apps/aegis-desktop.png"
+    [[ -f "${src_icons_dir}/icon.png" ]] && install -m 644 "${src_icons_dir}/icon.png" "${hicolor}/512x512/apps/aegis-desktop.png"
     [[ -f "${src_icons_dir}/icon.svg" ]] && install -m 644 "${src_icons_dir}/icon.svg" "${hicolor}/scalable/apps/aegis-desktop.svg"
   else
-    curl -fsSL "https://raw.githubusercontent.com/${DESKTOP_REPO}/main/apps/desktop/src-tauri/icons/icon.png" \
-      -o "${hicolor}/512x512/apps/aegis-desktop.png" 2>/dev/null || true
+    curl -fsSL "https://raw.githubusercontent.com/${DESKTOP_REPO}/main/apps/desktop/src-tauri/icons/32x32.png" \
+      -o "${hicolor}/32x32/apps/aegis-desktop.png" 2>/dev/null || true
     curl -fsSL "https://raw.githubusercontent.com/${DESKTOP_REPO}/main/apps/desktop/src-tauri/icons/128x128.png" \
       -o "${hicolor}/128x128/apps/aegis-desktop.png" 2>/dev/null || true
+    curl -fsSL "https://raw.githubusercontent.com/${DESKTOP_REPO}/main/apps/desktop/src-tauri/icons/128x128@2x.png" \
+      -o "${hicolor}/256x256/apps/aegis-desktop.png" 2>/dev/null || true
+    curl -fsSL "https://raw.githubusercontent.com/${DESKTOP_REPO}/main/apps/desktop/src-tauri/icons/icon.png" \
+      -o "${hicolor}/512x512/apps/aegis-desktop.png" 2>/dev/null || true
     curl -fsSL "https://raw.githubusercontent.com/${DESKTOP_REPO}/main/apps/desktop/src-tauri/icons/icon.svg" \
       -o "${hicolor}/scalable/apps/aegis-desktop.svg" 2>/dev/null || true
   fi
@@ -263,11 +275,13 @@ install_linux_desktop_entry() {
   local src_icons_dir="${2:-}"
   local apps_dir="${HOME}/.local/share/applications"
   local desktop_file="${apps_dir}/aegis-desktop.desktop"
+  local rdns_desktop_file="${apps_dir}/ai.aegisos.desktop.desktop"
+  local abs_icon="${HOME}/.local/share/icons/hicolor/512x512/apps/aegis-desktop.png"
 
   install_linux_desktop_icons "$src_icons_dir"
 
   if [[ "$DRY_RUN" -eq 1 ]]; then
-    info "[dry-run] write desktop launcher to ${desktop_file} (Exec=${exec_path} %U)"
+    info "[dry-run] write desktop launchers to ${desktop_file} and ${rdns_desktop_file} (Icon=${abs_icon})"
     return 0
   fi
 
@@ -278,12 +292,29 @@ Type=Application
 Name=Aegis Desktop
 Comment=Local CoW Sandbox Workbench, Writing Studio, and Data Studio for Aegis OS
 Exec=${exec_path} %U
-Icon=aegis-desktop
+Icon=${abs_icon}
 Terminal=false
 Categories=Development;Office;Utility;
 StartupWMClass=aegis-desktop
 EOF
-  info "Installed application menu entry: ${desktop_file}"
+  cat > "$rdns_desktop_file" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Aegis Desktop
+Comment=Local CoW Sandbox Workbench, Writing Studio, and Data Studio for Aegis OS
+Exec=${exec_path} %U
+Icon=${abs_icon}
+Terminal=false
+NoDisplay=true
+StartupWMClass=aegis-desktop
+EOF
+  have_cmd update-desktop-database && update-desktop-database "$apps_dir" >/dev/null 2>&1 || true
+  if have_cmd kbuildsycoca6; then
+    kbuildsycoca6 >/dev/null 2>&1 || true
+  elif have_cmd kbuildsycoca5; then
+    kbuildsycoca5 >/dev/null 2>&1 || true
+  fi
+  info "Installed application menu entries: ${desktop_file} (+ Wayland app_id alias)"
 }
 
 uninstall_aegis_desktop() {
@@ -296,10 +327,14 @@ uninstall_aegis_desktop() {
   else
     run_cmd rm -f "${HOME}/.local/bin/aegis-desktop"
     run_cmd rm -rf "${HOME}/.local/lib/aegis-desktop" "${HOME}/.local/share/aegis-desktop"
-    run_cmd rm -f "${HOME}/.local/share/applications/aegis-desktop.desktop"
     run_cmd rm -f \
-      "${HOME}/.local/share/icons/hicolor/512x512/apps/aegis-desktop.png" \
+      "${HOME}/.local/share/applications/aegis-desktop.desktop" \
+      "${HOME}/.local/share/applications/ai.aegisos.desktop.desktop"
+    run_cmd rm -f \
+      "${HOME}/.local/share/icons/hicolor/32x32/apps/aegis-desktop.png" \
       "${HOME}/.local/share/icons/hicolor/128x128/apps/aegis-desktop.png" \
+      "${HOME}/.local/share/icons/hicolor/256x256/apps/aegis-desktop.png" \
+      "${HOME}/.local/share/icons/hicolor/512x512/apps/aegis-desktop.png" \
       "${HOME}/.local/share/icons/hicolor/scalable/apps/aegis-desktop.svg"
 
     if [[ "$DISTRO" == "debian" ]] && have_cmd dpkg && dpkg -s aegis-desktop >/dev/null 2>&1; then

@@ -31,26 +31,26 @@ export async function mountWritingStudio(opts: MountWritingStudioOptions): Promi
           <p class="aos-muted">
             ${
               workspaceId
-                ? 'Choose any Markdown, source file, or CSV/JSON dataset from the left workspace tree, or create a new file.'
-                : 'Use "+ Workspace" in the top bar (or open the Setup Guide) to mount a local folder under CoW isolation.'
+                ? 'Pick any file on the left, or click + File to start drafting.'
+                : 'Open a folder from the top bar or launch Guide to begin.'
             }
           </p>
         </div>
         <div class="sw-empty-cards">
           <div class="sw-empty-card">
             ${iconHtml('pen')}
-            <strong>Free Local Studio</strong>
-            <small>Split Markdown preview, source editing, and CoW Diff / Commit / Rollback for <code>.md</code> &amp; code.</small>
+            <strong>Writing Studio</strong>
+            <small>Split Markdown preview + instant CoW diff &amp; rollback.</small>
           </div>
           <div class="sw-empty-card">
             ${iconHtml('chartBar')}
-            <strong>Data Studio (V1.5)</strong>
-            <small>Open any <code>.csv</code>, <code>.tsv</code>, or tabular <code>.json</code> for sortable tables, stats, and SVG charts.</small>
+            <strong>Data Studio</strong>
+            <small>Interactive tables, column stats, and SVG charts from CSV/JSON.</small>
           </div>
           <div class="sw-empty-card">
             ${iconHtml('layers')}
-            <strong>Cloud Pro Dual-Surface</strong>
-            <small>Upgrade with an Ed25519 token for <code>.docx</code>, <code>.pptx</code>, <code>.pdf</code>, and <code>.tex</code> CRDT editing.</small>
+            <strong>Cloud Pro</strong>
+            <small>Dual-Surface CRDT for <code>.docx</code>, <code>.pptx</code>, <code>.pdf</code>, <code>.tex</code>.</small>
           </div>
         </div>
       </div>

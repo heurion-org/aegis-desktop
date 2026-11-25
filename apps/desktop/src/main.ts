@@ -13,6 +13,7 @@ import {
   shouldShowOnboardingWizard,
   type DesktopConnection,
   type DesktopEntitlements,
+  type FetchLike,
 } from '@aegis/core-shell'
 import {
   createLocalDataArtifactProducer,
@@ -314,11 +315,39 @@ async function pickFolderViaHost(): Promise<string | null> {
   return window.prompt('Workspace folder path:')
 }
 
+interface TauriDaemonHttpResponse {
+  status: number
+  content_type: string
+  body: string
+}
+
+function createTauriDaemonFetch(): FetchLike | undefined {
+  const tauri = window.__TAURI_INTERNALS__
+  if (!tauri?.invoke) return undefined
+  return async (input, init) => {
+    const parsed = new URL(input)
+    const path = `${parsed.pathname}${parsed.search}`
+    const method = (init?.method ?? 'GET').toUpperCase()
+    const body = typeof init?.body === 'string' ? init.body : null
+    const res = await tauri.invoke<TauriDaemonHttpResponse>('daemon_http_request', {
+      method,
+      path,
+      body,
+    })
+    return new Response(res.body, {
+      status: res.status,
+      headers: {
+        'Content-Type': res.content_type || 'application/json',
+      },
+    })
+  }
+}
+
 let activeShell: AegisCoreShell | null = null
 
 async function mountWithConnection(root: HTMLElement, conn: DesktopConnection): Promise<void> {
   activeShell?.dispose()
-  const client = new AegisDaemonClient(conn)
+  const client = new AegisDaemonClient(conn, createTauriDaemonFetch())
   const dataProducer = createLocalDataArtifactProducer()
   const rawTextOverrides = new Set<string>()
   let entitlements = loadSavedEntitlements()

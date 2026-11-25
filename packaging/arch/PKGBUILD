@@ -69,10 +69,17 @@ package() {
   ln -s /usr/lib/aegis-desktop/aegis-desktop "${pkgdir}/usr/bin/aegis-desktop"
   install -Dm644 "${srcdir}/aegis-desktop.desktop" \
     "${pkgdir}/usr/share/applications/aegis-desktop.desktop"
-  install -Dm644 "apps/desktop/src-tauri/icons/icon.png" \
-    "${pkgdir}/usr/share/icons/hicolor/512x512/apps/aegis-desktop.png"
+  install -Dm644 "${srcdir}/aegis-desktop.desktop" \
+    "${pkgdir}/usr/share/applications/ai.aegisos.desktop.desktop"
+  printf 'NoDisplay=true\n' >> "${pkgdir}/usr/share/applications/ai.aegisos.desktop.desktop"
+  install -Dm644 "apps/desktop/src-tauri/icons/32x32.png" \
+    "${pkgdir}/usr/share/icons/hicolor/32x32/apps/aegis-desktop.png"
   install -Dm644 "apps/desktop/src-tauri/icons/128x128.png" \
     "${pkgdir}/usr/share/icons/hicolor/128x128/apps/aegis-desktop.png"
+  install -Dm644 "apps/desktop/src-tauri/icons/128x128@2x.png" \
+    "${pkgdir}/usr/share/icons/hicolor/256x256/apps/aegis-desktop.png"
+  install -Dm644 "apps/desktop/src-tauri/icons/icon.png" \
+    "${pkgdir}/usr/share/icons/hicolor/512x512/apps/aegis-desktop.png"
   install -Dm644 "apps/desktop/src-tauri/icons/icon.svg" \
     "${pkgdir}/usr/share/icons/hicolor/scalable/apps/aegis-desktop.svg"
 }

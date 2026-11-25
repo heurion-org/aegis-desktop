@@ -208,11 +208,10 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
       const hero = document.createElement('div')
       hero.className = 'aos-wizard-hero'
       hero.innerHTML = `
-        <div class="aos-eyebrow">STEP 01 · ENVIRONMENT READY</div>
-        <h1 class="aos-serif-title">Isolated AI Execution,<br/><em>Editorial Precision.</em></h1>
+        <div class="aos-eyebrow">STEP 01 · WELCOME</div>
+        <h1 class="aos-serif-title">Write, analyze, and ship<br/><em>without fear.</em></h1>
         <p class="aos-wizard-lede">
-          Every edit runs inside a local Copy-on-Write sandbox before touching your files.
-          Write in Markdown or dual-surface docs, explore CSV/JSON datasets in Data Studio, and dispatch BYO AI agents safely.
+          Every change runs in an isolated sandbox first — review every diff before it ever touches your repo.
         </p>
       `
 
@@ -221,8 +220,8 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
       statusBanner.innerHTML = `
         ${iconHtml(opts.sandboxHealthy ? 'shield' : 'alertTriangle')}
         <div>
-          <strong>${opts.sandboxHealthy ? 'Local Control Plane Connected' : 'Sandbox Driver Needs Attention'}</strong>
-          <small>OS Isolation Driver: <code>${esc(opts.sandboxDriver)}</code> · Bound to loopback <code>127.0.0.1</code></small>
+          <strong>${opts.sandboxHealthy ? 'Sandbox Ready' : 'Sandbox Attention Needed'}</strong>
+          <small>Driver: <code>${esc(opts.sandboxDriver)}</code> · Loopback <code>127.0.0.1</code></small>
         </div>
       `
 
@@ -231,18 +230,18 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
       const pillars: Array<{ icon: IconName; title: string; desc: string }> = [
         {
           icon: 'shield',
-          title: 'CoW OS Sandbox',
-          desc: 'Agent changes land in an isolated shadow layer with Diff, Accept, and instant Rollback.',
+          title: 'Zero-Risk Sandbox',
+          desc: 'Inspect live diffs and accept or roll back in one click.',
         },
         {
           icon: 'pen',
           title: 'Writing & Data Studios',
-          desc: 'Edit Markdown/code side-by-side or inspect CSV/TSV/JSON tables and publish SVG charts.',
+          desc: 'Markdown, code, CSV tables, and SVG charts under one roof.',
         },
         {
           icon: 'lock',
-          title: 'Local-First Privacy',
-          desc: 'Datasets stay strictly local_only by default; high-risk actions pause for explicit approval.',
+          title: 'Yours By Default',
+          desc: 'Files stay local_only until you decide to sync or approve.',
         },
       ]
       for (const p of pillars) {
@@ -257,10 +256,10 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
       const intro = document.createElement('div')
       intro.className = 'aos-wizard-intro'
       intro.innerHTML = `
-        <div class="aos-eyebrow">STEP 02 · WORKSPACE DIRECTORY</div>
-        <h2 class="aos-serif-title">Choose your project or research folder</h2>
+        <div class="aos-eyebrow">STEP 02 · WORKSPACE</div>
+        <h2 class="aos-serif-title">Pick a folder to bring to life</h2>
         <p class="aos-wizard-lede">
-          Select a local folder or multi-repo root. Aegis Desktop automatically discovers child Git repositories and applies safe local-only sync defaults.
+          Repos and datasets stay isolated cleanly in one place.
         </p>
       `
 
@@ -337,11 +336,10 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
       const intro = document.createElement('div')
       intro.className = 'aos-wizard-intro'
       intro.innerHTML = `
-        <div class="aos-eyebrow">STEP 03 · BYO AI CLI AGENTS (OPTIONAL)</div>
-        <h2 class="aos-serif-title">Connect coding &amp; writing assistants</h2>
+        <div class="aos-eyebrow">STEP 03 · AGENTS (OPTIONAL)</div>
+        <h2 class="aos-serif-title">Bring the CLIs you already love</h2>
         <p class="aos-wizard-lede">
-          Local Markdown editing, Git diff/commit, and Data Studio CSV/JSON analytics work without any CLI installed.
-          Connect one or more CLIs below when you want AI agents to draft or refactor inside your sandbox.
+          Writing and Data Studios work standalone — connect AI CLIs whenever you're ready.
         </p>
       `
 
@@ -396,10 +394,10 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
       const intro = document.createElement('div')
       intro.className = 'aos-wizard-intro'
       intro.innerHTML = `
-        <div class="aos-eyebrow">STEP 04 · APPEARANCE &amp; WORKBENCH MAP</div>
-        <h2 class="aos-serif-title">Choose your canvas aesthetic</h2>
+        <div class="aos-eyebrow">STEP 04 · LAUNCH</div>
+        <h2 class="aos-serif-title">Make it yours</h2>
         <p class="aos-wizard-lede">
-          Styled after Heurion Nordic Editorial. Switch between Warm Parchment Light and Nordic Forest Dark anytime from the top bar.
+          Pick a theme — switch anytime from the top bar.
         </p>
       `
 
@@ -407,9 +405,9 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
       const themeRow = document.createElement('div')
       themeRow.className = 'aos-wizard-theme-row'
       const themes: Array<{ pref: ThemePref; icon: IconName; label: string; desc: string }> = [
-        { pref: 'light', icon: 'sun', label: 'Nordic Editorial Light', desc: 'Warm paper #FAF8F4 · Deep Forest #233E33' },
-        { pref: 'dark', icon: 'moon', label: 'Nordic Forest Dark', desc: 'Charcoal Pine #111614 · Mint #00C472' },
-        { pref: 'system', icon: 'monitor', label: 'Match System', desc: 'Follow OS light/dark preference' },
+        { pref: 'light', icon: 'sun', label: 'Nordic Editorial Light', desc: 'Warm paper #FAF8F4 · Forest #233E33' },
+        { pref: 'dark', icon: 'moon', label: 'Nordic Forest Dark', desc: 'Deep pine #111614 · Mint #00C472' },
+        { pref: 'system', icon: 'monitor', label: 'Match System', desc: 'Auto-follow your OS appearance' },
       ]
       for (const th of themes) {
         const btn = document.createElement('button')
@@ -429,18 +427,18 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
       const zones: Array<{ icon: IconName; title: string; desc: string }> = [
         {
           icon: 'layers',
-          title: 'Left Column · Files & CLIs',
-          desc: 'Browse files, filter folders, configure local_only privacy rules, and inspect installed CLIs.',
+          title: 'Left · Files & Privacy',
+          desc: 'Explore folders, sync rules, and connected CLIs.',
         },
         {
           icon: 'pen',
-          title: 'Center Stage · Studios',
-          desc: 'Open Markdown/code in Writing Studio, or .csv/.tsv/.json datasets in Data Studio with CoW Diff.',
+          title: 'Center · Dual Studios',
+          desc: 'Markdown split view, CSV charts, and live CoW diffs.',
         },
         {
           icon: 'bell',
-          title: 'Right Column · Tasks & Approvals',
-          desc: 'Attach @File / @Artifact chips, dispatch agent tasks, and approve policy escalations.',
+          title: 'Right · Agents & Approvals',
+          desc: 'Attach @File / @Artifact chips and approve actions.',
         },
       ]
       for (const z of zones) {
