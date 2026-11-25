@@ -477,9 +477,13 @@ ensure_source_build_deps() {
   else
     case "$DISTRO" in
       arch)
-        run_as_root pacman -S --needed --noconfirm \
-          base-devel pkgconf openssl webkit2gtk-4.1 gtk3 libayatana-appindicator \
-          librsvg patchelf bubblewrap nodejs pnpm curl git
+        local arch_pkgs=(
+          base-devel pkgconf openssl webkit2gtk-4.1 gtk3 libayatana-appindicator
+          librsvg patchelf bubblewrap curl git
+        )
+        have_cmd node || arch_pkgs+=(nodejs)
+        have_cmd pnpm || arch_pkgs+=(pnpm)
+        run_as_root pacman -S --needed --noconfirm "${arch_pkgs[@]}"
         ;;
       debian)
         run_as_root apt-get update -qq
@@ -493,10 +497,14 @@ ensure_source_build_deps() {
           bubblewrap curl git
         ;;
       fedora)
-        run_as_root dnf install -y \
-          @development-tools pkgconf-pkg-config openssl-devel \
-          webkit2gtk4.1-devel gtk3-devel libayatana-appindicator-gtk3-devel \
-          librsvg2-devel patchelf bubblewrap nodejs pnpm curl git
+        local fedora_pkgs=(
+          @development-tools pkgconf-pkg-config openssl-devel
+          webkit2gtk4.1-devel gtk3-devel libayatana-appindicator-gtk3-devel
+          librsvg2-devel patchelf bubblewrap curl git
+        )
+        have_cmd node || fedora_pkgs+=(nodejs)
+        have_cmd pnpm || fedora_pkgs+=(pnpm)
+        run_as_root dnf install -y "${fedora_pkgs[@]}"
         ;;
       *)
         warn "Unrecognized Linux distro; ensure Node >= 24, pnpm >= 10, Rust, WebKitGTK 4.1 dev headers, and bubblewrap are installed."
@@ -574,9 +582,26 @@ resolve_or_fetch_aegis_os() {
     return 0
   fi
 
-  info "Tarball not found; invoking aegis-os release installer into ${tmp_os_dir}..."
-  AEGIS_INSTALL_DIR="$tmp_os_dir" sh -c "$(curl -fsSL https://raw.githubusercontent.com/heurion-org/aegis-os/main/scripts/install.sh)"
-  cp "${tmp_os_dir}/aegis-os" "$dest"
+  info "Tarball not found; downloading signed aegis-os release binary into ${tmp_os_dir}..."
+  local sig_os sig_arch sig_bin
+  if [[ "$OS" == "macos" ]]; then
+    sig_os="darwin"
+    sig_arch="$([[ "$ARCH" == "aarch64" ]] && printf 'arm64' || printf 'x86_64')"
+  else
+    sig_os="linux"
+    sig_arch="$ARCH"
+  fi
+  sig_bin="aegis-os-${sig_os}-${sig_arch}"
+  local sig_base="https://github.com/${AEGIS_OS_REPO}/releases/latest/download"
+  curl -fsSL "${sig_base}/${sig_bin}" -o "${tmp_os_dir}/${sig_bin}"
+  curl -fsSL "${sig_base}/${sig_bin}.sig" -o "${tmp_os_dir}/${sig_bin}.sig"
+  if have_cmd ssh-keygen; then
+    printf '%s\n' 'aegis-os-release@heurion.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIObpFSqmFZ8/ObqSlGmN/zhTbFeDHDxlKx6ha6Y9Zi37' \
+      > "${tmp_os_dir}/allowed_signers"
+    ssh-keygen -Y verify -f "${tmp_os_dir}/allowed_signers" -I "aegis-os-release@heurion.org" \
+      -n "aegis-os-release" -s "${tmp_os_dir}/${sig_bin}.sig" < "${tmp_os_dir}/${sig_bin}" >/dev/null
+  fi
+  cp "${tmp_os_dir}/${sig_bin}" "$dest"
   chmod +x "$dest"
 }
 
@@ -593,7 +618,7 @@ install_from_source() {
     info "[dry-run] fetch ${DESKTOP_REPO}@${ref} tarball into temporary directory"
     info "[dry-run] stage sidecar at apps/desktop/src-tauri/binaries/aegis-os-${TARGET_TRIPLE}"
     info "[dry-run] run: pnpm install --frozen-lockfile && pnpm --filter @aegis/desktop build"
-    info "[dry-run] run: cargo build --release --manifest-path apps/desktop/src-tauri/Cargo.toml"
+    info "[dry-run] run: CARGO_TARGET_DIR=.../target cargo build --release --manifest-path apps/desktop/src-tauri/Cargo.toml"
     info "[dry-run] install binaries under ${HOME}/.local/lib/aegis-desktop and launcher at ${HOME}/.local/bin/aegis-desktop"
     return 0
   fi
@@ -610,6 +635,7 @@ install_from_source() {
 
   (
     cd "$src_dir"
+    export CARGO_TARGET_DIR="${src_dir}/target"
     pnpm install --frozen-lockfile
     pnpm --filter @aegis/desktop build
     cargo build --release --manifest-path apps/desktop/src-tauri/Cargo.toml
