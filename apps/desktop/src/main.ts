@@ -434,6 +434,13 @@ async function mountWithConnection(root: HTMLElement, conn: DesktopConnection): 
         entitlements: ctx.entitlements,
         onRequestUpgrade: ctx.onRequestUpgrade,
         quickActions: ctx.quickActions,
+        onOpenDataView:
+          filePath && isDataFile(filePath) && rawTextOverrides.has(filePath)
+            ? () => {
+                rawTextOverrides.delete(filePath)
+                activeShell?.render()
+              }
+            : undefined,
       })
     },
   })

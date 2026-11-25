@@ -20,13 +20,13 @@ export const ROLE_CATALOG: RoleDescriptor[] = [
     id: 'writer',
     label: 'Writer',
     description: 'Drafts Markdown locally or edits Dual-Surface CRDT docs & slides in Cloud Pro.',
-    preferredAgents: ['claude', 'agy', 'opencode'],
+    preferredAgents: ['claude', 'opencode', 'agy'],
   },
   {
     id: 'analyst',
     label: 'Analyst',
     description: 'Queries datasets, verifies numbers, and prepares data artifacts for docs.',
-    preferredAgents: ['opencode', 'agy', 'claude'],
+    preferredAgents: ['opencode', 'claude', 'agy'],
   },
   {
     id: 'reviewer',

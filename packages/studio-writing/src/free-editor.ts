@@ -6,6 +6,7 @@ export interface FreeMarkdownEditorOptions {
   bridge: WritingHostBridge
   workspaceId: string
   filePath: string
+  onOpenDataView?: () => void
 }
 
 type FreeEditorViewMode = 'split' | 'source' | 'preview'
@@ -139,17 +140,28 @@ export async function mountFreeMarkdownEditor(opts: FreeMarkdownEditorOptions): 
   const titleGroup = document.createElement('div')
   titleGroup.className = 'sw-toolbar-actions'
   const title = document.createElement('strong')
-  title.textContent = isMd
-    ? `${filePath} (Local Free Markdown · No Cloud Sync)`
-    : `${filePath} (Local Free Code · No Cloud Sync)`
+  title.textContent = filePath
+  const kindBadge = document.createElement('span')
+  kindBadge.className = 'aos-badge muted'
+  kindBadge.textContent = isMd ? 'LOCAL MD' : 'LOCAL CODE'
   const dirtyBadge = document.createElement('span')
   dirtyBadge.className = 'aos-badge warn sw-dirty-dot'
   dirtyBadge.innerHTML = '<span class="aos-status-dot"></span><span>Unsaved</span>'
   dirtyBadge.hidden = true
-  titleGroup.append(title, dirtyBadge)
+  titleGroup.append(title, kindBadge, dirtyBadge)
 
   const actions = document.createElement('div')
   actions.className = 'sw-toolbar-actions'
+
+  if (opts.onOpenDataView) {
+    const dataBtn = document.createElement('button')
+    dataBtn.type = 'button'
+    dataBtn.className = 'aos-btn aos-btn-sm'
+    dataBtn.innerHTML = `${iconHtml('chartBar')}<span>Data Studio</span>`
+    dataBtn.title = 'Switch back to interactive Data Studio table & chart view'
+    dataBtn.onclick = () => opts.onOpenDataView?.()
+    actions.appendChild(dataBtn)
+  }
 
   if (isMd) {
     const viewGroup = document.createElement('div')
@@ -182,29 +194,29 @@ export async function mountFreeMarkdownEditor(opts: FreeMarkdownEditorOptions): 
     embedBtn = document.createElement('button')
     embedBtn.type = 'button'
     embedBtn.className = 'aos-btn aos-btn-sm'
-    embedBtn.textContent = '+ Embed Artifact'
+    embedBtn.innerHTML = `${iconHtml('plus')}<span>Artifact</span>`
     actions.appendChild(embedBtn)
   }
 
   const saveBtn = document.createElement('button')
   saveBtn.type = 'button'
   saveBtn.className = 'aos-btn aos-btn-sm aos-btn-primary'
-  saveBtn.textContent = 'Save'
+  saveBtn.innerHTML = `${iconHtml('check')}<span>Save</span>`
 
   const diffBtn = document.createElement('button')
   diffBtn.type = 'button'
   diffBtn.className = 'aos-btn aos-btn-sm'
-  diffBtn.textContent = 'Diff'
+  diffBtn.innerHTML = `${iconHtml('diff')}<span>Diff</span>`
 
   const acceptBtn = document.createElement('button')
   acceptBtn.type = 'button'
   acceptBtn.className = 'aos-btn aos-btn-sm'
-  acceptBtn.textContent = 'Accept Changes'
+  acceptBtn.innerHTML = `${iconHtml('check')}<span>Accept</span>`
 
   const rollbackBtn = document.createElement('button')
   rollbackBtn.type = 'button'
   rollbackBtn.className = 'aos-btn aos-btn-sm'
-  rollbackBtn.textContent = 'Rollback'
+  rollbackBtn.innerHTML = `${iconHtml('undo')}<span>Rollback</span>`
 
   actions.append(saveBtn, diffBtn, acceptBtn, rollbackBtn)
   toolbar.append(titleGroup, actions)
@@ -270,7 +282,7 @@ export async function mountFreeMarkdownEditor(opts: FreeMarkdownEditorOptions): 
       updateMetaAndDirty()
       saveBtn.innerHTML = `${iconHtml('check')}<span>Saved</span>`
       setTimeout(() => {
-        saveBtn.textContent = 'Save'
+        saveBtn.innerHTML = `${iconHtml('check')}<span>Save</span>`
       }, 1200)
     } catch (err) {
       showStatus(err instanceof Error ? err.message : String(err))
@@ -373,7 +385,7 @@ export async function mountFreeMarkdownEditor(opts: FreeMarkdownEditorOptions): 
         acceptBtn.innerHTML = `${iconHtml('check')}<span>Accepted</span>`
       }
       setTimeout(() => {
-        acceptBtn.textContent = 'Accept Changes'
+        acceptBtn.innerHTML = `${iconHtml('check')}<span>Accept</span>`
       }, 1500)
       showStatus(res.summary ?? (res.commit_hash ? `Committed ${res.commit_hash}` : 'Changes committed.'))
     } catch (err) {
@@ -396,7 +408,7 @@ export async function mountFreeMarkdownEditor(opts: FreeMarkdownEditorOptions): 
       updateMetaAndDirty()
       rollbackBtn.innerHTML = `${iconHtml('undo')}<span>Rolled Back</span>`
       setTimeout(() => {
-        rollbackBtn.textContent = 'Rollback'
+        rollbackBtn.innerHTML = `${iconHtml('undo')}<span>Rollback</span>`
       }, 1500)
       diffDrawer.hidden = true
     } catch (err) {

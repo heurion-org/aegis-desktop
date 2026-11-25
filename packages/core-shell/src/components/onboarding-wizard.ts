@@ -192,12 +192,16 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
     body.className = 'aos-wizard-body'
 
     if (step === 0) {
+      const readyClis = agents.filter(a => a.installed && a.authenticated).length
       const hero = document.createElement('div')
       hero.className = 'aos-wizard-hero'
       hero.innerHTML = `
         <div class="aos-wizard-top-tags">
           <span class="aos-eyebrow">STEP 01 · PICK WORKSPACE</span>
-          <span class="aos-badge ${opts.sandboxHealthy ? 'ok' : 'warn'}">${iconHtml('shield')}<span>${opts.sandboxHealthy ? `Sandbox ready (${esc(opts.sandboxDriver)})` : esc(opts.sandboxDriver)}</span></span>
+          <div class="sw-toolbar-actions">
+            <span class="aos-badge ${readyClis > 0 ? 'ok' : 'warn'}">${iconHtml('terminal')}<span>${readyClis}/${agents.length} CLIs ready</span></span>
+            <span class="aos-badge ${opts.sandboxHealthy ? 'ok' : 'warn'}">${iconHtml('shield')}<span>${opts.sandboxHealthy ? `Sandbox ready (${esc(opts.sandboxDriver)})` : esc(opts.sandboxDriver)}</span></span>
+          </div>
         </div>
         <h1 class="aos-serif-title">Pick a folder, <em>start working.</em></h1>
         <p class="aos-wizard-lede">
@@ -279,7 +283,7 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
       intro.className = 'aos-wizard-intro'
       intro.innerHTML = `
         <div class="aos-eyebrow">STEP 02 · CHOOSE STARTING MODE</div>
-        <h2 class="aos-serif-title">How would you like to start?</h2>
+        <h2 class="aos-serif-title">${activeWorkspace ? `Start working in ${esc(activeWorkspace.name)}` : 'How would you like to start?'}</h2>
         <p class="aos-wizard-lede">
           Coding starts directly in the CLI-style Agent Workstream. Data &amp; Writing open the Heurion Doc Canvas alongside.
         </p>
@@ -322,6 +326,10 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
         card.onclick = () => {
           selectedIntent = it.id
           paint()
+        }
+        card.ondblclick = () => {
+          selectedIntent = it.id
+          finish(it.id)
         }
         intentGrid.appendChild(card)
       }
@@ -432,6 +440,7 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
       const nextBtn = document.createElement('button')
       nextBtn.type = 'button'
       nextBtn.className = 'aos-btn aos-btn-primary'
+      nextBtn.disabled = !activeWorkspace
       nextBtn.innerHTML = `<span>Continue</span>${iconHtml('arrowRight')}`
       nextBtn.onclick = () => {
         errorMessage = ''

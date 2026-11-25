@@ -21,6 +21,7 @@ export interface MountWritingStudioOptions {
   entitlements: DesktopEntitlements
   onRequestUpgrade: (reason: string) => void
   quickActions?: StudioQuickActions
+  onOpenDataView?: () => void
 }
 
 function esc(raw: string): string {
@@ -31,7 +32,7 @@ function esc(raw: string): string {
  * Main entry point mounted by either `apps/desktop` or standalone `apps/writing-standalone`.
  */
 export async function mountWritingStudio(opts: MountWritingStudioOptions): Promise<void> {
-  const { container, bridge, workspaceId, filePath, entitlements, onRequestUpgrade, quickActions } = opts
+  const { container, bridge, workspaceId, filePath, entitlements, onRequestUpgrade, quickActions, onOpenDataView } = opts
   if (!workspaceId || !filePath) {
     container.innerHTML = ''
     const wrap = document.createElement('div')
@@ -82,7 +83,7 @@ export async function mountWritingStudio(opts: MountWritingStudioOptions): Promi
       writeCard.className = 'sw-action-card is-primary'
       writeCard.innerHTML = `
         <div class="sw-action-head">${iconHtml('pen')}<span>New Markdown Note</span>${iconHtml('arrowRight')}</div>
-        <small>Create <code>notes/getting-started.md</code> with live preview and CoW Diff.</small>
+        <small>Create <code>notes/draft.md</code> with live preview and CoW Diff.</small>
       `
       writeCard.onclick = () => quickActions?.onCreateMarkdown()
 
@@ -100,7 +101,7 @@ export async function mountWritingStudio(opts: MountWritingStudioOptions): Promi
       agentCard.className = 'sw-action-card'
       agentCard.innerHTML = `
         <div class="sw-action-head">${iconHtml('terminal')}<span>Ask AI Assistant</span>${iconHtml('arrowRight')}</div>
-        <small>Focus the sandboxed AI composer on the right with a starter prompt.</small>
+        <small>Focus the Agent Workstream on the left with a starter prompt.</small>
       `
       agentCard.onclick = () => quickActions?.onAskAgent()
 
@@ -135,7 +136,7 @@ export async function mountWritingStudio(opts: MountWritingStudioOptions): Promi
 
   const access = resolveFormatAccess(filePath, entitlements)
   if (access.mode === 'local_markdown' || access.mode === 'local_code') {
-    await mountFreeMarkdownEditor({ container, bridge, workspaceId, filePath })
+    await mountFreeMarkdownEditor({ container, bridge, workspaceId, filePath, onOpenDataView })
     return
   }
 

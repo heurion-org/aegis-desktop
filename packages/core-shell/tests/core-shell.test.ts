@@ -2,8 +2,11 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   AegisDaemonClient,
+  MIN_RECOMMENDED_DAEMON_VERSION,
   applySyncModeFilter,
+  isSemverAtLeast,
   type DesktopAgentStatus,
+  type DesktopTaskRecord,
   type WorkspaceTreeEntry,
 } from '../src/daemon-client.ts'
 import {
@@ -15,7 +18,13 @@ import {
 } from '../src/entitlements.ts'
 import { selectAgentForRole } from '../src/roles.ts'
 import { filterTreeEntries, upsertSyncRule } from '../src/components/workspace-tree.ts'
+import {
+  buildTaskPromptWithRefs,
+  extractTaskPrimaryOutput,
+  parseTaskPromptDisplay,
+} from '../src/components/task-stream.ts'
 import { brandMarkSvg, iconHtml } from '../src/icons.ts'
+import { renderChatMarkdownHtml } from '../src/markdown.ts'
 import { WIZARD_STEPS, shouldShowOnboardingWizard } from '../src/components/onboarding-wizard.ts'
 
 test('Free tier permits local .md and coding files while gating rich CRDT formats to Cloud Pro', () => {
@@ -272,8 +281,9 @@ test('filterTreeEntries keeps matching files and their ancestor directories', ()
 })
 
 test('vector SVG icon helpers and onboarding wizard trigger work cleanly without emojis', () => {
-  const shield = iconHtml('shield')
-  assert.match(shield, /^<svg class="aos-icon" viewBox="0 0 20 20"/)
+  for (const name of ['shield', 'copy', 'gitBranch', 'trash', 'play'] as const) {
+    assert.match(iconHtml(name), /^<svg class="aos-icon" viewBox="0 0 20 20"/)
+  }
   const mark = brandMarkSvg('aos-boot-mark')
   assert.match(mark, /class="aos-brand-mark aos-boot-mark"/)
 
@@ -283,4 +293,66 @@ test('vector SVG icon helpers and onboarding wizard trigger work cleanly without
   assert.equal(shouldShowOnboardingWizard({ completedBefore: true, workspaceCount: 1 }), false)
   assert.equal(shouldShowOnboardingWizard({ completedBefore: true, workspaceCount: 1, forceOpen: true }), true)
 })
+
+test('isSemverAtLeast enforces minimum daemon version cleanly', () => {
+  assert.equal(isSemverAtLeast('0.12.1', MIN_RECOMMENDED_DAEMON_VERSION), true)
+  assert.equal(isSemverAtLeast('0.12.10', MIN_RECOMMENDED_DAEMON_VERSION), true)
+  assert.equal(isSemverAtLeast('0.13.0', MIN_RECOMMENDED_DAEMON_VERSION), true)
+  assert.equal(isSemverAtLeast('1.0.0', MIN_RECOMMENDED_DAEMON_VERSION), true)
+  assert.equal(isSemverAtLeast('0.12.0', MIN_RECOMMENDED_DAEMON_VERSION), false)
+  assert.equal(isSemverAtLeast('', MIN_RECOMMENDED_DAEMON_VERSION), false)
+  assert.equal(isSemverAtLeast(null, MIN_RECOMMENDED_DAEMON_VERSION), false)
+})
+
+test('renderChatMarkdownHtml renders lists, tables, fences, and neutralizes HTML injection', () => {
+  const html = renderChatMarkdownHtml(
+    '## Report\n\n- item **bold** and `x*y`\n1. first\n\n```sh\necho "<script>"\n```\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n\n<img src=x onerror=alert(1)>',
+  )
+  assert.match(html, /<h2>Report<\/h2>/)
+  assert.match(html, /<ul>\n<li>item <strong>bold<\/strong> and <code>x\*y<\/code><\/li>\n<\/ul>/)
+  assert.match(html, /<ol>\n<li>first<\/li>\n<\/ol>/)
+  assert.match(html, /<pre><code>echo &quot;&lt;script&gt;&quot;<\/code><\/pre>/)
+  assert.match(html, /<table><thead><tr><th>A<\/th><th>B<\/th><\/tr><\/thead><tbody>/)
+  assert.doesNotMatch(html, /<img /)
+  assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/)
+})
+
+test('task prompt context attachment and primary output extraction work cleanly', () => {
+  assert.equal(buildTaskPromptWithRefs('Summarize', []), 'Summarize')
+  const withRefs = buildTaskPromptWithRefs('Summarize', ['README.md', '@data/metrics.csv'])
+  assert.equal(withRefs, '[Workspace context files: @README.md, @data/metrics.csv]\n\nSummarize')
+
+  const parsed = parseTaskPromptDisplay(withRefs)
+  assert.deepEqual(parsed.refs, ['@README.md', '@data/metrics.csv'])
+  assert.equal(parsed.body, 'Summarize')
+
+  const completedTask: DesktopTaskRecord = {
+    task_id: 'tsk_1',
+    workspace_id: 'ws_1',
+    role: 'coder',
+    resolved_agent: 'claude',
+    prompt: withRefs,
+    status: 'completed',
+    created_at: '2026-11-25T00:00:00Z',
+    steps: [
+      { seq: 1, kind: 'started', summary: 'Started', detail: null, raw_log: null, timestamp: 't1' },
+      { seq: 2, kind: 'completed', summary: 'Done', detail: 'Fallback detail', raw_log: '## Answer\n\nAll good.', timestamp: 't2' },
+    ],
+  }
+  const out1 = extractTaskPrimaryOutput(completedTask)
+  assert.equal(out1.text, '## Answer\n\nAll good.')
+  assert.equal(out1.isError, false)
+
+  const failedHintTask: DesktopTaskRecord = {
+    ...completedTask,
+    status: 'failed',
+    steps: [
+      { seq: 1, kind: 'failed', summary: 'Agent missing', detail: 'Install claude first', raw_log: null, timestamp: 't1' },
+    ],
+  }
+  const out2 = extractTaskPrimaryOutput(failedHintTask)
+  assert.equal(out2.text, 'Install claude first')
+  assert.equal(out2.isError, true)
+})
+
 

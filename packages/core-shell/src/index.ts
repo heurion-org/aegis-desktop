@@ -1,6 +1,7 @@
 export * from './daemon-client.ts'
 export * from './entitlements.ts'
 export * from './icons.ts'
+export * from './markdown.ts'
 export * from './roles.ts'
 export * from './theme.ts'
 export * from './components/agent-onboarding.ts'

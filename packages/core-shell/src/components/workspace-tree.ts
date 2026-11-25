@@ -8,6 +8,8 @@ export interface WorkspaceTreeOptions {
   syncPolicy: SyncPolicy
   entitlements: DesktopEntitlements
   selectedPath: string | null
+  activeRepo?: string | null
+  attachedRefs?: string[]
   collapsedDirs?: Set<string>
   searchQuery?: string
   onSearchChange?: (query: string) => void
@@ -97,6 +99,8 @@ export function renderWorkspaceTree(opts: WorkspaceTreeOptions): void {
     syncPolicy,
     entitlements,
     selectedPath,
+    activeRepo = null,
+    attachedRefs = [],
     collapsedDirs = new Set<string>(),
     searchQuery = '',
     onSearchChange,
@@ -112,7 +116,7 @@ export function renderWorkspaceTree(opts: WorkspaceTreeOptions): void {
   const header = document.createElement('div')
   header.className = 'aos-panel-header'
   const title = document.createElement('span')
-  title.textContent = 'Workspace Files'
+  title.textContent = activeRepo ? `Files · ${activeRepo}` : 'Workspace Files'
 
   const headerActions = document.createElement('div')
   headerActions.className = 'aos-tree-header-actions'
@@ -285,9 +289,12 @@ export function renderWorkspaceTree(opts: WorkspaceTreeOptions): void {
       row.className = 'aos-tree-file-row'
       const attachBtn = document.createElement('button')
       attachBtn.type = 'button'
-      attachBtn.className = 'aos-tree-attach-btn'
+      const isAttached = attachedRefs.includes(entry.path)
+      attachBtn.className = `aos-tree-attach-btn ${isAttached ? 'is-attached' : ''}`
       attachBtn.textContent = '@'
-      attachBtn.title = `Attach @${entry.path} to Workstream prompt`
+      attachBtn.title = isAttached
+        ? `Attached @${entry.path} to Workstream prompt`
+        : `Attach @${entry.path} to Workstream prompt`
       attachBtn.onclick = ev => {
         ev.stopPropagation()
         onAttachFile(entry.path)

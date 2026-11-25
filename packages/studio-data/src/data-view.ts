@@ -17,6 +17,13 @@ export interface MountDataStudioOptions {
   onOpenRawText?: () => void
 }
 
+const SVG_ICON_PLUS =
+  '<svg class="aos-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4.25v11.5M4.25 10h11.5"/></svg>'
+const SVG_ICON_CHART =
+  '<svg class="aos-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.25 3.75v12.5h13.5M6.75 13.5V9.25M10.25 13.5V5.5M13.75 13.5V10"/></svg>'
+const SVG_ICON_CODE =
+  '<svg class="aos-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 2.75h6.75L15.25 6.25v11H5z"/><path d="M11.75 2.75v3.5h3.5"/><path d="M8.5 10.5L7 12l1.5 1.5M11.5 10.5L13 12l-1.5 1.5"/></svg>'
+
 export async function mountDataStudio(opts: MountDataStudioOptions): Promise<void> {
   const { container, workspaceId, filePath, readTextFile, producer, onArtifactPublished, onOpenRawText } =
     opts
@@ -71,11 +78,14 @@ export async function mountDataStudio(opts: MountDataStudioOptions): Promise<voi
   const titleWrap = document.createElement('div')
   titleWrap.className = 'sw-toolbar-actions'
   const titleEl = document.createElement('strong')
-  titleEl.textContent = `${filePath} · Data Studio`
+  titleEl.textContent = filePath
+  const studioBadge = document.createElement('span')
+  studioBadge.className = 'aos-badge muted'
+  studioBadge.innerHTML = `${SVG_ICON_CHART}<span>Data Studio</span>`
   const dimBadge = document.createElement('span')
   dimBadge.className = 'aos-badge info'
   dimBadge.textContent = `${dataset.rows.length} rows × ${dataset.headers.length} cols`
-  titleWrap.append(titleEl, dimBadge)
+  titleWrap.append(titleEl, studioBadge, dimBadge)
 
   const actions = document.createElement('div')
   actions.className = 'sw-toolbar-actions'
@@ -86,19 +96,19 @@ export async function mountDataStudio(opts: MountDataStudioOptions): Promise<voi
   const pubTableBtn = document.createElement('button')
   pubTableBtn.type = 'button'
   pubTableBtn.className = 'aos-btn aos-btn-sm aos-btn-primary'
-  pubTableBtn.textContent = '+ Publish Table'
+  pubTableBtn.innerHTML = `${SVG_ICON_PLUS}<span>Publish Table</span>`
   pubTableBtn.disabled = dataset.headers.length === 0
 
   const pubKpiBtn = document.createElement('button')
   pubKpiBtn.type = 'button'
   pubKpiBtn.className = 'aos-btn aos-btn-sm'
-  pubKpiBtn.textContent = '+ Publish KPI'
+  pubKpiBtn.innerHTML = `${SVG_ICON_PLUS}<span>Publish KPI</span>`
   pubKpiBtn.disabled = dataset.headers.length === 0
 
   const pubChartBtn = document.createElement('button')
   pubChartBtn.type = 'button'
   pubChartBtn.className = 'aos-btn aos-btn-sm'
-  pubChartBtn.textContent = '+ Publish Chart'
+  pubChartBtn.innerHTML = `${SVG_ICON_CHART}<span>Publish Chart</span>`
   pubChartBtn.disabled = numericCols.length === 0
 
   actions.append(pubTableBtn, pubKpiBtn, pubChartBtn)
@@ -106,7 +116,7 @@ export async function mountDataStudio(opts: MountDataStudioOptions): Promise<voi
     const rawBtn = document.createElement('button')
     rawBtn.type = 'button'
     rawBtn.className = 'aos-btn aos-btn-sm'
-    rawBtn.textContent = 'Raw Text'
+    rawBtn.innerHTML = `${SVG_ICON_CODE}<span>Raw Text</span>`
     rawBtn.onclick = () => onOpenRawText()
     actions.appendChild(rawBtn)
   }

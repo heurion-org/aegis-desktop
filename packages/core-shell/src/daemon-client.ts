@@ -356,6 +356,30 @@ export class AegisDaemonClient {
   }
 }
 
+export const MIN_RECOMMENDED_DAEMON_VERSION = '0.12.1'
+
+function parseSemverParts(raw: string | null | undefined): [number, number, number] | null {
+  if (!raw) return null
+  const m = raw.match(/(\d+)\.(\d+)\.(\d+)/)
+  if (!m) return null
+  return [Number(m[1]), Number(m[2]), Number(m[3])]
+}
+
+/**
+ * Returns `true` iff `actual` contains a `major.minor.patch` semver >= `minimum`.
+ */
+export function isSemverAtLeast(
+  actual: string | null | undefined,
+  minimum = MIN_RECOMMENDED_DAEMON_VERSION,
+): boolean {
+  const a = parseSemverParts(actual)
+  const b = parseSemverParts(minimum)
+  if (!a || !b) return false
+  if (a[0] !== b[0]) return a[0] > b[0]
+  if (a[1] !== b[1]) return a[1] > b[1]
+  return a[2] >= b[2]
+}
+
 export function applySyncModeFilter(
   entries: WorkspaceTreeEntry[],
   entitlements: DesktopEntitlements,

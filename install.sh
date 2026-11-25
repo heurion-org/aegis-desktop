@@ -8,6 +8,7 @@ set -euo pipefail
 DESKTOP_REPO="heurion-org/aegis-desktop"
 AEGIS_OS_REPO="heurion-org/aegis-os"
 DEFAULT_AEGIS_OS_TAG="v0.12.1"
+MIN_AEGIS_OS_VERSION="0.12.1"
 
 VERSION="${AEGIS_DESKTOP_VERSION:-latest}"
 FROM_SOURCE="${AEGIS_DESKTOP_FROM_SOURCE:-0}"
@@ -53,6 +54,26 @@ abort() {
 
 have_cmd() {
   command -v "$1" >/dev/null 2>&1
+}
+
+extract_semver() {
+  printf '%s' "$1" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 || true
+}
+
+version_gte() {
+  local current="$1"
+  local minimum="$2"
+  [[ -n "$current" && -n "$minimum" ]] || return 1
+  local c1 c2 c3 m1 m2 m3
+  IFS='.' read -r c1 c2 c3 <<< "$current"
+  IFS='.' read -r m1 m2 m3 <<< "$minimum"
+  c1=$((10#${c1:-0})); c2=$((10#${c2:-0})); c3=$((10#${c3:-0}))
+  m1=$((10#${m1:-0})); m2=$((10#${m2:-0})); m3=$((10#${m3:-0}))
+  (( c1 > m1 )) && return 0
+  (( c1 < m1 )) && return 1
+  (( c2 > m2 )) && return 0
+  (( c2 < m2 )) && return 1
+  (( c3 >= m3 ))
 }
 
 cleanup() {
@@ -607,6 +628,11 @@ resolve_or_fetch_aegis_os() {
   local dest="$1"
 
   if [[ -n "${AEGIS_OS_BIN:-}" && -x "${AEGIS_OS_BIN:-}" ]]; then
+    local override_ver=""
+    override_ver="$(extract_semver "$("${AEGIS_OS_BIN}" --version 2>/dev/null || true)")"
+    if [[ -n "$override_ver" ]] && ! version_gte "$override_ver" "$MIN_AEGIS_OS_VERSION"; then
+      warn "AEGIS_OS_BIN=${AEGIS_OS_BIN} is version ${override_ver} (< ${MIN_AEGIS_OS_VERSION}); some desktop features may be degraded."
+    fi
     info "Using AEGIS_OS_BIN=${AEGIS_OS_BIN}"
     run_cmd cp "$AEGIS_OS_BIN" "$dest"
     run_cmd chmod +x "$dest"
@@ -614,15 +640,16 @@ resolve_or_fetch_aegis_os() {
   fi
 
   if have_cmd aegis-os; then
-    local existing
+    local existing existing_ver=""
     existing="$(command -v aegis-os)"
-    if "$existing" desktop-daemon --help >/dev/null 2>&1; then
-      info "Using existing aegis-os at ${existing}"
+    existing_ver="$(extract_semver "$("$existing" --version 2>/dev/null || true)")"
+    if "$existing" desktop-daemon --help >/dev/null 2>&1 && version_gte "$existing_ver" "$MIN_AEGIS_OS_VERSION"; then
+      info "Using existing aegis-os ${existing_ver} at ${existing}"
       run_cmd cp "$existing" "$dest"
       run_cmd chmod +x "$dest"
       return 0
     fi
-    warn "Existing aegis-os at ${existing} lacks desktop-daemon; fetching ${DEFAULT_AEGIS_OS_TAG}..."
+    warn "Existing aegis-os at ${existing} is ${existing_ver:-unknown} (< ${MIN_AEGIS_OS_VERSION}); fetching ${DEFAULT_AEGIS_OS_TAG}..."
   fi
 
   ohai "Downloading verified aegis-os (${DEFAULT_AEGIS_OS_TAG} / ${TARGET_TRIPLE})..."

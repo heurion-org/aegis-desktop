@@ -212,25 +212,222 @@ pre,
 .aos-workstream-pane {
   min-width: 0;
   min-height: 0;
-  overflow: auto;
-  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
   background: var(--bg);
 }
 
 .aos-workstream-inner {
-  width: min(820px, 100%);
+  flex: 1;
+  min-height: 0;
+  width: min(860px, 100%);
   margin: 0 auto;
+  padding: 16px 24px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
+  overflow: auto;
 }
 
 .aos-main-grid.has-canvas .aos-workstream-pane {
-  padding: 18px 20px;
+  padding: 0;
 }
 
 .aos-main-grid.has-canvas .aos-workstream-inner {
   width: 100%;
+  padding: 14px 18px;
+}
+
+.aos-workstream-host {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.aos-workstream-welcome {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.aos-workstream-chat {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.aos-session-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.aos-task-timeline-scroll {
+  flex: 1;
+  min-height: 160px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 4px;
+}
+
+.aos-composer-dock {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.aos-topbar .aos-select {
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.aos-status-dot.is-ok {
+  color: var(--ok);
+}
+
+.aos-status-dot.is-warn {
+  color: var(--warn);
+}
+
+.aos-vcs-host {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.aos-ws-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+
+.aos-ws-status-group,
+.aos-repo-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.aos-vcs-feedback {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  background: var(--ok-soft);
+  border: 1px solid var(--ok);
+  color: var(--ok);
+  border-radius: 3px;
+}
+
+.aos-commit-inline-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--card);
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+}
+
+.aos-commit-inline-bar.is-warn {
+  background: var(--warn-soft);
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.aos-commit-inline-bar span,
+.aos-commit-inline-bar .aos-input {
+  flex: 1;
+}
+
+.aos-diff-panel {
+  background: var(--card);
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.aos-diff-pre {
+  margin: 0;
+  padding: 8px;
+  max-height: 240px;
+  overflow: auto;
+  background: var(--raised);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.aos-diff-line {
+  display: block;
+}
+
+.aos-diff-line.is-add {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.aos-diff-line.is-del {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.aos-diff-line.is-hunk {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+:root[data-theme='dark'] .aos-diff-line.is-hunk {
+  color: var(--brand-mint);
+}
+
+.aos-upgrade-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  background: var(--warn-soft);
+  border: 1px solid var(--warn);
+  color: var(--warn);
+  font-size: 12.5px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.aos-upgrade-banner span {
+  flex: 1;
+  min-width: 240px;
 }
 
 .aos-workstream-hero,
@@ -407,10 +604,47 @@ pre,
   opacity: 1;
 }
 
+.aos-tree-attach-btn.is-attached {
+  opacity: 1;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+:root[data-theme='dark'] .aos-tree-attach-btn.is-attached {
+  color: var(--brand-mint);
+  border-color: var(--brand-mint);
+}
+
 .aos-tree-attach-btn:hover {
   background: var(--accent);
   color: var(--accent-ink);
   border-color: var(--accent);
+}
+
+.aos-agent-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.aos-cli-cmd-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.aos-cli-cmd-code {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  padding: 4px 8px;
+  background: var(--raised);
+  border: 1px solid var(--border);
+  border-radius: 2px;
 }
 
 .aos-side-tabs {
@@ -670,14 +904,199 @@ pre,
 .aos-agent-card,
 .aos-approval-card,
 .aos-task-card,
+.aos-task-turn,
 .sw-pro-gate {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 3px;
-  padding: 10px 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.aos-task-turn.status-failed {
+  border-left: 3px solid var(--danger);
+}
+
+.aos-task-turn.status-completed {
+  border-left: 3px solid var(--ok);
+}
+
+.aos-task-turn.status-running,
+.aos-task-turn.status-queued {
+  border-left: 3px solid var(--brand-mint);
+}
+
+.aos-task-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.aos-task-user-prompt {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  padding: 8px 10px;
+  background: var(--raised);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+
+.aos-task-prompt-text {
+  white-space: pre-wrap;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.aos-task-answer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.aos-task-live-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.aos-inline-hint-warn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  background: var(--warn-soft);
+  border: 1px solid var(--warn);
+  color: var(--warn);
+  border-radius: 3px;
+}
+
+.aos-pulse-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--brand-mint);
+  animation: aos-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes aos-pulse {
+  0%, 100% {
+    opacity: 0.35;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+.aos-task-markdown {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.aos-task-markdown.is-error {
+  padding: 10px 12px;
+  background: var(--danger-soft);
+  border: 1px solid var(--danger);
+  border-radius: 3px;
+  color: var(--danger);
+}
+
+.aos-task-markdown h1,
+.aos-task-markdown h2,
+.aos-task-markdown h3,
+.aos-task-markdown h4 {
+  font-family: var(--serif);
+  margin: 10px 0 4px;
+}
+
+.aos-task-markdown p {
+  margin: 0 0 8px;
+}
+
+.aos-task-markdown p:last-child {
+  margin-bottom: 0;
+}
+
+.aos-task-markdown ul,
+.aos-task-markdown ol {
+  margin: 4px 0 8px;
+  padding-left: 20px;
+}
+
+.aos-task-markdown pre {
+  background: var(--raised);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 10px;
+  overflow: auto;
+  font-size: 12px;
+  margin: 6px 0;
+}
+
+.aos-task-markdown blockquote {
+  margin: 6px 0;
+  padding: 4px 12px;
+  border-left: 3px solid var(--accent);
+  color: var(--text-secondary);
+}
+
+.aos-task-markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin: 6px 0;
+}
+
+.aos-task-markdown th,
+.aos-task-markdown td {
+  border: 1px solid var(--border);
+  padding: 5px 8px;
+  text-align: left;
+}
+
+.aos-task-markdown th {
+  background: var(--panel);
+}
+
+.aos-task-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.aos-task-trace {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.aos-task-trace summary {
+  cursor: pointer;
+  user-select: none;
+}
+
+.aos-task-trace pre {
+  background: var(--raised);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 8px;
+  overflow: auto;
+  max-height: 180px;
+}
+
+.sw-free-editor,
+.sw-pro-canvas,
+.sd-studio {
+  min-width: 0;
 }
 
 .aos-agent-top,

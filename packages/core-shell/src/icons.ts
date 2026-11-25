@@ -33,6 +33,10 @@ export type IconName =
   | 'x'
   | 'layers'
   | 'alertTriangle'
+  | 'copy'
+  | 'gitBranch'
+  | 'trash'
+  | 'play'
 
 const ICON_BODY: Record<IconName, string> = {
   shield:
@@ -83,6 +87,10 @@ const ICON_BODY: Record<IconName, string> = {
   x: '<path d="M5.25 5.25l9.5 9.5M14.75 5.25l-9.5 9.5"/>',
   layers: '<path d="M10 3.25L3.25 7 10 10.75 16.75 7 10 3.25z"/><path d="M3.25 10.25L10 14l6.75-3.75M3.25 13.25L10 17l6.75-3.75"/>',
   alertTriangle: '<path d="M10 3.25l7 12.75H3L10 3.25z"/><path d="M10 8v4M10 14.25h.01"/>',
+  copy: '<rect x="7" y="7" width="9.5" height="9.5" rx="1.25"/><path d="M5.5 13H4.75A1.25 1.25 0 0 1 3.5 11.75v-7A1.25 1.25 0 0 1 4.75 3.5h7A1.25 1.25 0 0 1 13 4.75V5.5"/>',
+  gitBranch: '<circle cx="6" cy="4.75" r="1.75"/><circle cx="6" cy="15.25" r="1.75"/><circle cx="14" cy="7.25" r="1.75"/><path d="M6 6.5v7M14 9a4 4 0 0 1-4 4H6"/>',
+  trash: '<path d="M4.25 5.75h11.5M7.75 5.75V4.25a1 1 0 0 1 1-1h2.5a1 1 0 0 1 1 1v1.5M6 5.75l.75 10a1.25 1.25 0 0 0 1.25 1.15h4a1.25 1.25 0 0 0 1.25-1.15l.75-10"/>',
+  play: '<polygon points="6.25,4.5 15.75,10 6.25,15.5"/>',
 }
 
 /** Render a crisp inline vector SVG icon (`viewBox="0 0 20 20"`). */
