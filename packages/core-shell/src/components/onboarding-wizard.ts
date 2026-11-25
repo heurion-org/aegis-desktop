@@ -4,7 +4,7 @@ import { getThemePref, setThemePref, type ThemePref } from '../theme.ts'
 
 export const ONBOARDING_COMPLETED_KEY = 'aegis.desktop.onboarding_completed'
 
-export type OnboardingIntent = 'write' | 'data' | 'agent'
+export type OnboardingIntent = 'code' | 'data' | 'write' | 'agent'
 
 export interface WizardStepMeta {
   index: number
@@ -19,22 +19,15 @@ export const WIZARD_STEPS: readonly WizardStepMeta[] = [
     index: 0,
     code: '01',
     title: 'Workspace',
-    subtitle: 'Pick a local folder',
+    subtitle: 'Select folder to start',
     icon: 'folderOpen',
   },
   {
     index: 1,
     code: '02',
-    title: 'Start With',
-    subtitle: 'Choose your first workflow',
-    icon: 'compass',
-  },
-  {
-    index: 2,
-    code: '03',
-    title: 'Launch',
-    subtitle: 'Theme & enter workbench',
-    icon: 'sun',
+    title: 'Mode & Launch',
+    subtitle: 'Coding, Data, or Writing',
+    icon: 'terminal',
   },
 ] as const
 
@@ -105,7 +98,7 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
   document.querySelector('.aos-wizard-backdrop')?.remove()
 
   let step = 0
-  let selectedIntent: OnboardingIntent = 'write'
+  let selectedIntent: OnboardingIntent = 'code'
   let agents = [...opts.agents]
   let workspaces = [...opts.workspaces]
   let activeWorkspace = opts.activeWorkspace
@@ -116,7 +109,7 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
   backdrop.className = 'aos-wizard-backdrop'
   backdrop.setAttribute('role', 'dialog')
   backdrop.setAttribute('aria-modal', 'true')
-  backdrop.setAttribute('aria-label', 'Aegis Desktop Onboarding Wizard')
+  backdrop.setAttribute('aria-label', 'Aegis Desktop Setup')
 
   const shell = document.createElement('div')
   shell.className = 'aos-wizard-shell'
@@ -169,7 +162,7 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
 
     const brand = document.createElement('div')
     brand.className = 'aos-wizard-brand'
-    brand.innerHTML = `${brandMarkSvg()}<div><span class="aos-eyebrow">HEURION × AEGIS OS</span><strong>Quick Setup</strong></div>`
+    brand.innerHTML = `${brandMarkSvg()}<div><span class="aos-eyebrow">HEURION × AEGIS OS</span><strong>Desktop Workbench</strong></div>`
 
     const stepper = document.createElement('nav')
     stepper.className = 'aos-wizard-stepper'
@@ -190,8 +183,8 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
     const skipBtn = document.createElement('button')
     skipBtn.type = 'button'
     skipBtn.className = 'aos-btn aos-btn-sm'
-    skipBtn.innerHTML = `${iconHtml('x')}<span>Skip</span>`
-    skipBtn.onclick = () => finish()
+    skipBtn.innerHTML = `${iconHtml('x')}<span>Skip to Workstream</span>`
+    skipBtn.onclick = () => finish('code')
 
     header.append(brand, stepper, skipBtn)
 
@@ -203,12 +196,12 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
       hero.className = 'aos-wizard-hero'
       hero.innerHTML = `
         <div class="aos-wizard-top-tags">
-          <span class="aos-eyebrow">STEP 01 · WORKSPACE</span>
+          <span class="aos-eyebrow">STEP 01 · PICK WORKSPACE</span>
           <span class="aos-badge ${opts.sandboxHealthy ? 'ok' : 'warn'}">${iconHtml('shield')}<span>${opts.sandboxHealthy ? `Sandbox ready (${esc(opts.sandboxDriver)})` : esc(opts.sandboxDriver)}</span></span>
         </div>
-        <h1 class="aos-serif-title">Write, analyze, and ship <em>without fear.</em></h1>
+        <h1 class="aos-serif-title">Pick a folder, <em>start working.</em></h1>
         <p class="aos-wizard-lede">
-          Pick a project folder to begin — every edit stays isolated until you accept it.
+          Code, analyze datasets, or draft documents directly — open the Heurion Doc Canvas whenever you need visual UI.
         </p>
       `
 
@@ -251,7 +244,7 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
       if (workspaces.length > 0) {
         const existingSection = document.createElement('div')
         existingSection.className = 'aos-wizard-existing'
-        existingSection.innerHTML = `<div class="aos-eyebrow">CONNECTED WORKSPACES (${workspaces.length})</div>`
+        existingSection.innerHTML = `<div class="aos-eyebrow">RECENT WORKSPACES (${workspaces.length})</div>`
         const wsList = document.createElement('div')
         wsList.className = 'aos-wizard-ws-list'
         for (const ws of workspaces) {
@@ -281,14 +274,14 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
         existingSection.appendChild(wsList)
         body.appendChild(existingSection)
       }
-    } else if (step === 1) {
+    } else {
       const intro = document.createElement('div')
       intro.className = 'aos-wizard-intro'
       intro.innerHTML = `
-        <div class="aos-eyebrow">STEP 02 · CHOOSE YOUR STARTING POINT</div>
-        <h2 class="aos-serif-title">What would you like to do first?</h2>
+        <div class="aos-eyebrow">STEP 02 · CHOOSE STARTING MODE</div>
+        <h2 class="aos-serif-title">How would you like to start?</h2>
         <p class="aos-wizard-lede">
-          Pick one to open directly inside your workspace.
+          Coding starts directly in the CLI-style Agent Workstream. Data &amp; Writing open the Heurion Doc Canvas alongside.
         </p>
       `
 
@@ -296,22 +289,22 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
       intentGrid.className = 'aos-wizard-intent-grid'
       const intents: Array<{ id: OnboardingIntent; icon: IconName; title: string; desc: string }> = [
         {
-          id: 'write',
-          icon: 'pen',
-          title: 'Write & Edit Docs',
-          desc: 'Open README or create a Markdown note with live diff.',
+          id: 'code',
+          icon: 'terminal',
+          title: 'Coding & Terminal Workstream',
+          desc: 'Start immediately in the clean Agent prompt stream — zero canvas clutter.',
         },
         {
           id: 'data',
           icon: 'chartBar',
-          title: 'Explore Data & Charts',
-          desc: 'Inspect CSV/JSON tables, stats, and SVG charts.',
+          title: 'Data Analysis + Charts',
+          desc: 'Workstream on left + Data Studio CSV/JSON tables & SVG charts on right.',
         },
         {
-          id: 'agent',
-          icon: 'terminal',
-          title: 'Run an AI Task',
-          desc: 'Send a sandboxed prompt to Claude, OpenCode, or Codex.',
+          id: 'write',
+          icon: 'pen',
+          title: 'Writing + Heurion Doc Canvas',
+          desc: 'Workstream on left + Heurion Doc split canvas & live CoW diff on right.',
         },
       ]
       for (const it of intents) {
@@ -335,7 +328,7 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
 
       const cliBox = document.createElement('div')
       cliBox.className = 'aos-wizard-existing'
-      cliBox.innerHTML = `<div class="aos-eyebrow">OPTIONAL · AI CLIs DETECTED ON YOUR MACHINE</div>`
+      cliBox.innerHTML = `<div class="aos-eyebrow">CONNECTED AI CLIs &amp; APPEARANCE</div>`
       const grid = document.createElement('div')
       grid.className = 'aos-wizard-agent-grid'
       for (const ag of agents) {
@@ -368,41 +361,23 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
             }
           }
           card.appendChild(instBtn)
-        } else if (!ag.authenticated && ag.auth_hint) {
-          const hint = document.createElement('small')
-          hint.className = 'aos-muted'
-          hint.textContent = ag.auth_hint
-          card.appendChild(hint)
         }
         grid.appendChild(card)
       }
-      cliBox.appendChild(grid)
-
-      body.append(intro, intentGrid, cliBox)
-    } else {
-      const intro = document.createElement('div')
-      intro.className = 'aos-wizard-intro'
-      intro.innerHTML = `
-        <div class="aos-eyebrow">STEP 03 · APPEARANCE &amp; LAUNCH</div>
-        <h2 class="aos-serif-title">Make it yours</h2>
-        <p class="aos-wizard-lede">
-          Pick a theme — then jump straight into your workspace.
-        </p>
-      `
 
       const currentPref = getThemePref()
       const themeRow = document.createElement('div')
       themeRow.className = 'aos-wizard-theme-row'
-      const themes: Array<{ pref: ThemePref; icon: IconName; label: string; desc: string }> = [
-        { pref: 'light', icon: 'sun', label: 'Nordic Editorial Light', desc: 'Warm paper #FAF8F4 · Forest #233E33' },
-        { pref: 'dark', icon: 'moon', label: 'Nordic Forest Dark', desc: 'Deep pine #111614 · Mint #00C472' },
-        { pref: 'system', icon: 'monitor', label: 'Match System', desc: 'Auto-follow OS appearance' },
+      const themes: Array<{ pref: ThemePref; icon: IconName; label: string }> = [
+        { pref: 'light', icon: 'sun', label: 'Nordic Light' },
+        { pref: 'dark', icon: 'moon', label: 'Nordic Dark' },
+        { pref: 'system', icon: 'monitor', label: 'System' },
       ]
       for (const th of themes) {
         const btn = document.createElement('button')
         btn.type = 'button'
         btn.className = `aos-wizard-theme-card ${currentPref === th.pref ? 'is-selected' : ''}`
-        btn.innerHTML = `${iconHtml(th.icon)}<div><strong>${th.label}</strong><small>${th.desc}</small></div>`
+        btn.innerHTML = `${iconHtml(th.icon)}<strong>${th.label}</strong>`
         btn.onclick = () => {
           setThemePref(th.pref)
           opts.onThemeChanged?.()
@@ -411,33 +386,8 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
         themeRow.appendChild(btn)
       }
 
-      const tour = document.createElement('div')
-      tour.className = 'aos-wizard-cards'
-      const zones: Array<{ icon: IconName; title: string; desc: string }> = [
-        {
-          icon: 'layers',
-          title: 'Left · Files & Privacy',
-          desc: 'Browse files and keep sensitive folders local_only.',
-        },
-        {
-          icon: 'pen',
-          title: 'Center · Studios',
-          desc: 'Markdown split view, CSV charts, and live CoW diffs.',
-        },
-        {
-          icon: 'bell',
-          title: 'Right · Assistant & Approvals',
-          desc: 'Run AI tasks and approve boundary actions.',
-        },
-      ]
-      for (const z of zones) {
-        const c = document.createElement('div')
-        c.className = 'aos-wizard-card'
-        c.innerHTML = `<div class="aos-card-icon">${iconHtml(z.icon)}</div><strong>${z.title}</strong><p>${z.desc}</p>`
-        tour.appendChild(c)
-      }
-
-      body.append(intro, themeRow, tour)
+      cliBox.append(grid, themeRow)
+      body.append(intro, intentGrid, cliBox)
     }
 
     if (busyMessage) {
@@ -459,8 +409,8 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
     const leftNote = document.createElement('small')
     leftNote.className = 'aos-muted'
     leftNote.textContent = activeWorkspace
-      ? `Workspace: ${activeWorkspace.name} · Next: ${selectedIntent === 'write' ? 'Writing Studio' : selectedIntent === 'data' ? 'Data Studio' : 'AI Assistant'}`
-      : 'Tip: Pick a workspace folder in Step 01 to start editing right away.'
+      ? `Workspace: ${activeWorkspace.name} (${activeWorkspace.path})`
+      : 'Tip: Pick a workspace folder in Step 01 to start working.'
 
     const navBtns = document.createElement('div')
     navBtns.className = 'aos-wizard-nav-btns'

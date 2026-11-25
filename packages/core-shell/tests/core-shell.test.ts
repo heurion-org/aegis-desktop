@@ -277,7 +277,7 @@ test('vector SVG icon helpers and onboarding wizard trigger work cleanly without
   const mark = brandMarkSvg('aos-boot-mark')
   assert.match(mark, /class="aos-brand-mark aos-boot-mark"/)
 
-  assert.equal(WIZARD_STEPS.length, 3)
+  assert.equal(WIZARD_STEPS.length, 2)
   assert.equal(shouldShowOnboardingWizard({ completedBefore: false, workspaceCount: 2 }), true)
   assert.equal(shouldShowOnboardingWizard({ completedBefore: true, workspaceCount: 0 }), true)
   assert.equal(shouldShowOnboardingWizard({ completedBefore: true, workspaceCount: 1 }), false)

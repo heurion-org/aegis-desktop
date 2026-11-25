@@ -13,6 +13,7 @@ export interface WorkspaceTreeOptions {
   onSearchChange?: (query: string) => void
   onToggleDir?: (dirPath: string) => void
   onSelectFile: (entry: WorkspaceTreeEntry) => void
+  onAttachFile?: (relPath: string) => void
   onCreateFile?: (relPath: string) => Promise<void>
   onToggleDefaultSync?: (mode: 'local_only' | 'cloud_crdt') => void
   onSetFolderSyncRule?: (dirPath: string, mode: SyncMode) => Promise<void>
@@ -101,6 +102,7 @@ export function renderWorkspaceTree(opts: WorkspaceTreeOptions): void {
     onSearchChange,
     onToggleDir,
     onSelectFile,
+    onAttachFile,
     onCreateFile,
     onToggleDefaultSync,
     onSetFolderSyncRule,
@@ -277,7 +279,24 @@ export function renderWorkspaceTree(opts: WorkspaceTreeOptions): void {
 
     btn.append(nameWrap, badge)
     btn.onclick = () => onSelectFile(entry)
-    li.appendChild(btn)
+
+    if (onAttachFile) {
+      const row = document.createElement('div')
+      row.className = 'aos-tree-file-row'
+      const attachBtn = document.createElement('button')
+      attachBtn.type = 'button'
+      attachBtn.className = 'aos-tree-attach-btn'
+      attachBtn.textContent = '@'
+      attachBtn.title = `Attach @${entry.path} to Workstream prompt`
+      attachBtn.onclick = ev => {
+        ev.stopPropagation()
+        onAttachFile(entry.path)
+      }
+      row.append(btn, attachBtn)
+      li.appendChild(row)
+    } else {
+      li.appendChild(btn)
+    }
     list.appendChild(li)
   }
 

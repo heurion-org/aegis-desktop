@@ -1,5 +1,5 @@
 import { ROLE_CATALOG, selectAgentForRole, type AgentRole } from '../roles.ts'
-import { iconHtml, type IconName } from '../icons.ts'
+import { brandMarkSvg, iconHtml, type IconName } from '../icons.ts'
 import type {
   AegisDaemonClient,
   DesktopAgentStatus,
@@ -17,6 +17,7 @@ export interface TaskStreamOptions {
   container: HTMLElement
   client: AegisDaemonClient
   workspaceId: string | null
+  workspaceName?: string | null
   activeRepo?: string | null
   agents: DesktopAgentStatus[]
   activeFilePath: string | null
@@ -24,7 +25,10 @@ export interface TaskStreamOptions {
   artifacts?: TaskArtifactRef[]
   attachedRefs?: string[]
   tasks?: DesktopTaskRecord[]
+  initialRole?: AgentRole
+  onRoleChanged?: (role: AgentRole) => void
   onTaskUpdated?: (task: DesktopTaskRecord) => void
+  onOpenCanvas?: () => void
 }
 
 const ROLE_ICONS: Record<AgentRole, IconName> = {
@@ -34,9 +38,73 @@ const ROLE_ICONS: Record<AgentRole, IconName> = {
   reviewer: 'sparkles',
 }
 
+interface StarterPromptItem {
+  title: string
+  prompt: string
+}
+
+const ROLE_STARTERS: Record<AgentRole, readonly StarterPromptItem[]> = {
+  coder: [
+    {
+      title: 'Explore architecture',
+      prompt: 'Summarize the architecture, key entrypoints, and build/test commands in this workspace.',
+    },
+    {
+      title: 'Review & harden',
+      prompt: 'Inspect recent changes or open modules for bugs, edge cases, and missing tests.',
+    },
+    {
+      title: 'Implement feature',
+      prompt: 'Add a focused improvement with unit tests inside the CoW sandbox and explain the diff.',
+    },
+  ],
+  analyst: [
+    {
+      title: 'Profile dataset',
+      prompt: 'Scan CSV/JSON datasets in this workspace and report key distributions, outliers, and missing values.',
+    },
+    {
+      title: 'Compare cohorts',
+      prompt: 'Analyze outcomes across groups in the dataset and summarize statistically notable differences.',
+    },
+    {
+      title: 'Draft figure plan',
+      prompt: 'Propose 2 concise summary tables and charts ready to embed into a report.',
+    },
+  ],
+  writer: [
+    {
+      title: 'Draft document outline',
+      prompt: 'Draft a clear executive outline and section plan based on the files in this workspace.',
+    },
+    {
+      title: 'Polish & tighten prose',
+      prompt: 'Edit the active document for clarity, active voice, and tighter structure while keeping key facts.',
+    },
+    {
+      title: 'Executive summary',
+      prompt: 'Write a concise 1-page briefing summarizing conclusions from the attached files and artifacts.',
+    },
+  ],
+  reviewer: [
+    {
+      title: 'Security & boundary audit',
+      prompt: 'Audit this workspace for unsafe assumptions, error handling gaps, and permission edge cases.',
+    },
+    {
+      title: 'Pre-commit review',
+      prompt: 'Review uncommitted changes and list high-priority fixes before landing.',
+    },
+    {
+      title: 'Verify claims & numbers',
+      prompt: 'Cross-check factual statements and metrics against attached source files.',
+    },
+  ],
+}
+
 export class TaskStreamController {
   private readonly opts: TaskStreamOptions
-  private role: AgentRole = 'writer'
+  private role: AgentRole
   private overrideAgentId = ''
   private attachedRefs: string[]
   private tasks: DesktopTaskRecord[]
@@ -45,13 +113,20 @@ export class TaskStreamController {
 
   constructor(opts: TaskStreamOptions) {
     this.opts = opts
+    this.role = opts.initialRole ?? 'coder'
     this.tasks = opts.tasks ?? []
     this.attachedRefs = opts.attachedRefs ?? []
   }
 
+  setRole(role: AgentRole): void {
+    this.role = role
+    this.opts.onRoleChanged?.(role)
+    this.render()
+  }
+
   focusComposer(prefillPrompt?: string): void {
     if (!this.textareaEl) return
-    if (prefillPrompt && !this.textareaEl.value.trim()) {
+    if (prefillPrompt !== undefined) {
       this.textareaEl.value = prefillPrompt
     }
     this.textareaEl.focus()
@@ -110,8 +185,17 @@ export class TaskStreamController {
 
   render(): void {
     if (this.disposed) return
-    const { container, agents, workspaceId, activeRepo, activeFilePath, workspaceFiles = [], artifacts = [] } =
-      this.opts
+    const {
+      container,
+      agents,
+      workspaceId,
+      workspaceName,
+      activeRepo,
+      activeFilePath,
+      workspaceFiles = [],
+      artifacts = [],
+      onOpenCanvas,
+    } = this.opts
     container.innerHTML = ''
 
     const composer = document.createElement('form')
@@ -127,6 +211,7 @@ export class TaskStreamController {
       chip.innerHTML = `${iconHtml(ROLE_ICONS[r.id])}<span>${r.label}</span>`
       chip.onclick = () => {
         this.role = r.id
+        this.opts.onRoleChanged?.(r.id)
         this.render()
       }
       roleChips.appendChild(chip)
@@ -209,11 +294,11 @@ export class TaskStreamController {
     const textarea = document.createElement('textarea')
     this.textareaEl = textarea
     textarea.className = 'aos-textarea'
-    textarea.rows = 3
-    const scopeHint = activeFilePath ?? activeRepo ?? 'current workspace'
+    textarea.rows = 4
+    const scopeHint = activeFilePath ?? activeRepo ?? workspaceName ?? 'current workspace'
     textarea.placeholder = workspaceId
-      ? `Ask ${resolved.selectedAgentId ?? 'agent'} (${this.role}) on ${scopeHint}…`
-      : 'Open a workspace first to run an isolated CoW task…'
+      ? `Ask ${resolved.selectedAgentId ?? 'agent'} (${this.role}) on ${scopeHint}… (Ctrl+Enter to run)`
+      : 'Pick a workspace folder first to start working…'
     textarea.disabled = !workspaceId
 
     const submitRow = document.createElement('div')
@@ -225,18 +310,10 @@ export class TaskStreamController {
     const submitBtn = document.createElement('button')
     submitBtn.type = 'submit'
     submitBtn.className = 'aos-btn aos-btn-primary'
-    submitBtn.textContent = 'Run Isolated Task'
+    submitBtn.innerHTML = `${iconHtml('arrowRight')}<span>Run Task</span>`
     submitBtn.disabled = !workspaceId
 
-    submitRow.append(hint, submitBtn)
-    composer.append(roleChips, controls)
-    if (effectiveRefs.size > 0) {
-      composer.appendChild(refBar)
-    }
-    composer.append(textarea, submitRow)
-
-    composer.onsubmit = async ev => {
-      ev.preventDefault()
+    const submitTask = async () => {
       const prompt = textarea.value.trim()
       if (!prompt || !workspaceId) return
       textarea.value = ''
@@ -256,6 +333,66 @@ export class TaskStreamController {
       } finally {
         submitBtn.disabled = false
       }
+    }
+
+    textarea.onkeydown = ev => {
+      if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') {
+        ev.preventDefault()
+        void submitTask()
+      }
+    }
+
+    submitRow.append(hint, submitBtn)
+    composer.append(roleChips, controls)
+    if (effectiveRefs.size > 0) {
+      composer.appendChild(refBar)
+    }
+    composer.append(textarea, submitRow)
+
+    composer.onsubmit = async ev => {
+      ev.preventDefault()
+      await submitTask()
+    }
+
+    if (workspaceId && this.tasks.length === 0) {
+      const hero = document.createElement('div')
+      hero.className = 'aos-workstream-hero'
+      hero.innerHTML = `
+        <div class="aos-workstream-kicker">
+          ${brandMarkSvg()}
+          <span class="aos-eyebrow">${workspaceName ?? 'WORKSPACE READY'}</span>
+        </div>
+        <h2 class="aos-serif-title">What are we working on?</h2>
+        <p class="aos-muted">Type a prompt below like in the CLI, attach <code>@File</code> context from the tree, or open the Heurion Doc Canvas alongside.</p>
+      `
+
+      const starterGrid = document.createElement('div')
+      starterGrid.className = 'aos-starter-grid'
+      for (const item of ROLE_STARTERS[this.role]) {
+        const btn = document.createElement('button')
+        btn.type = 'button'
+        btn.className = 'aos-starter-card'
+        btn.innerHTML = `<strong>${item.title}</strong><small>${item.prompt}</small>`
+        btn.onclick = () => {
+          this.focusComposer(item.prompt)
+        }
+        starterGrid.appendChild(btn)
+      }
+
+      container.append(hero, composer, starterGrid)
+
+      if (onOpenCanvas) {
+        const canvasRow = document.createElement('div')
+        canvasRow.className = 'aos-canvas-hint-row'
+        const canvasBtn = document.createElement('button')
+        canvasBtn.type = 'button'
+        canvasBtn.className = 'aos-btn aos-btn-sm'
+        canvasBtn.innerHTML = `${iconHtml('layers')}<span>Need a visual workspace? Open Heurion Doc Canvas</span>${iconHtml('arrowRight')}`
+        canvasBtn.onclick = onOpenCanvas
+        canvasRow.appendChild(canvasBtn)
+        container.appendChild(canvasRow)
+      }
+      return
     }
 
     const timeline = document.createElement('div')

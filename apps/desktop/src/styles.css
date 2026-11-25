@@ -184,29 +184,233 @@ pre,
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 270px 1fr 336px;
+  grid-template-columns: 256px minmax(0, 1fr);
 }
 
-.aos-main-grid.is-right-collapsed {
-  grid-template-columns: 270px 1fr;
+.aos-main-grid.is-left-collapsed {
+  grid-template-columns: minmax(0, 1fr);
 }
 
-.aos-sidebar-left,
-.aos-sidebar-right {
+.aos-main-grid.has-canvas {
+  grid-template-columns: 256px minmax(360px, 0.92fr) minmax(420px, 1.08fr);
+}
+
+.aos-main-grid.is-left-collapsed.has-canvas {
+  grid-template-columns: minmax(360px, 0.92fr) minmax(420px, 1.08fr);
+}
+
+.aos-sidebar-left {
   background: var(--panel);
+  padding: 12px;
   overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border-right: 1px solid var(--border);
+}
+
+.aos-workstream-pane {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 24px 28px;
+  background: var(--bg);
+}
+
+.aos-workstream-inner {
+  width: min(820px, 100%);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.aos-main-grid.has-canvas .aos-workstream-pane {
+  padding: 18px 20px;
+}
+
+.aos-main-grid.has-canvas .aos-workstream-inner {
+  width: 100%;
+}
+
+.aos-workstream-hero,
+.aos-workstream-empty {
+  background: var(--card);
+  border: 1px solid var(--border);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 44px 44px;
+  padding: 24px 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.aos-workstream-empty {
+  align-items: flex-start;
+  margin-top: 24px;
+}
+
+.aos-workstream-kicker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.aos-workstream-hero .aos-serif-title,
+.aos-workstream-empty .aos-serif-title {
+  font-size: 28px;
+}
+
+.aos-starter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.aos-starter-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.aos-starter-card:hover {
+  background: var(--hover);
+  border-color: var(--accent);
+}
+
+.aos-starter-card strong {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.aos-starter-card small {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.aos-canvas-hint-row {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.aos-inline-approval-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--warn-soft);
+  border: 1px solid var(--warn);
+  color: var(--warn);
+  font-size: 12.5px;
+}
+
+.aos-inline-approval-bar span {
+  flex: 1;
+}
+
+.aos-canvas-pane {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border-left: 1px solid var(--border-strong);
+}
+
+.aos-canvas-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.aos-canvas-title,
+.aos-canvas-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.aos-canvas-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px;
   display: flex;
   flex-direction: column;
 }
 
-.aos-sidebar-left {
-  padding: 12px;
-  gap: 16px;
-  border-right: 1px solid var(--border);
+.aos-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: var(--backdrop);
+  display: flex;
+  justify-content: flex-end;
 }
 
-.aos-sidebar-right {
-  border-left: 1px solid var(--border);
+.aos-drawer-panel {
+  width: min(400px, 92vw);
+  height: 100%;
+  background: var(--panel);
+  border-left: 1px solid var(--border-strong);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+}
+
+.aos-bell-active {
+  background: var(--warn-soft);
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.aos-tree-file-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.aos-tree-file-row .aos-tree-item {
+  flex: 1;
+  min-width: 0;
+}
+
+.aos-tree-attach-btn {
+  opacity: 0;
+  flex-shrink: 0;
+  background: var(--card);
+  color: var(--accent);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 2px 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.aos-tree-file-row:hover .aos-tree-attach-btn,
+.aos-tree-attach-btn:focus-visible {
+  opacity: 1;
+}
+
+.aos-tree-attach-btn:hover {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
 }
 
 .aos-side-tabs {
@@ -1460,6 +1664,9 @@ pre,
 
 @media (max-width: 900px) {
   .aos-main-grid,
+  .aos-main-grid.has-canvas,
+  .aos-main-grid.is-left-collapsed.has-canvas,
+  .aos-starter-grid,
   .aos-wizard-cards,
   .aos-wizard-intent-grid,
   .aos-wizard-agent-grid,

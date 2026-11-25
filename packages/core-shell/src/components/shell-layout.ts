@@ -4,6 +4,7 @@ import type { OnboardingIntent } from './onboarding-wizard.ts'
 import { TaskStreamController, type TaskArtifactRef } from './task-stream.ts'
 import { renderWorkspaceTree, upsertSyncRule } from './workspace-tree.ts'
 import { brandMarkSvg, iconHtml } from '../icons.ts'
+import type { AgentRole } from '../roles.ts'
 import { getThemePref, resolveEffectiveTheme, setThemePref } from '../theme.ts'
 import {
   applySyncModeFilter,
@@ -18,7 +19,7 @@ import {
 import { DEFAULT_FREE_ENTITLEMENTS, resolveFormatAccess, type DesktopEntitlements } from '../entitlements.ts'
 
 export type ShellSurfaceMode = 'workbench' | 'studio'
-export type RightSidebarTab = 'assistant' | 'approvals' | 'system'
+export type ShellDrawerKind = 'none' | 'approvals' | 'system'
 
 export interface StudioQuickActions {
   onOpenWorkspace: () => void
@@ -53,13 +54,13 @@ export interface CoreShellOptions {
   listArtifacts?: (workspaceId: string) => Promise<TaskArtifactRef[]>
 }
 
-const SAMPLE_NOTE_CONTENT = `# Getting Started
+const SAMPLE_NOTE_CONTENT = `# Working Draft
 
-Welcome to **Aegis Desktop**.
+Welcome to the **Heurion Doc Canvas**.
 
-- Write in Markdown on the left and see live preview on the right.
-- Press \`Ctrl+S\` (or \`Save\`) to write into the sandbox, then inspect **Diff** or **Accept Changes**.
-- Open **AI Assistant** on the right to draft sections or analyze data with \`@File\` / \`@Artifact\`.
+- Edit Markdown on the left and preview live on the right.
+- Press \`Ctrl+S\` to save into the sandbox, then inspect **Diff** or **Accept Changes**.
+- Ask the **Agent Workstream** on the left to rewrite sections, cite sources, or analyze data.
 `
 
 const SAMPLE_CSV_CONTENT = `cohort,patients,response_rate,median_months
@@ -72,9 +73,10 @@ Combination,44,0.81,22.1
 export class AegisCoreShell {
   private readonly opts: CoreShellOptions
   private entitlements: DesktopEntitlements
-  private mode: ShellSurfaceMode = 'studio'
-  private rightTab: RightSidebarTab = 'assistant'
-  private rightCollapsed = false
+  private preferredRole: AgentRole = 'coder'
+  private leftCollapsed = false
+  private canvasOpen = false
+  private activeDrawer: ShellDrawerKind = 'none'
   private agents: DesktopAgentStatus[] = []
   private workspaces: DesktopWorkspace[] = []
   private activeWorkspace: DesktopWorkspace | null = null
@@ -178,7 +180,7 @@ export class AegisCoreShell {
     const createdEntry = this.treeEntries.find(e => !e.is_dir && e.path === targetPath)
     if (createdEntry) {
       this.selectedFile = createdEntry
-      this.mode = 'studio'
+      this.canvasOpen = true
       this.render()
     }
   }
@@ -188,19 +190,41 @@ export class AegisCoreShell {
     if (!entry) return
     const decision = resolveFormatAccess(entry.name, this.entitlements)
     this.selectedFile = entry
+    this.canvasOpen = true
     if (!decision.allowed) {
       this.opts.onRequestUpgrade?.(decision.reason ?? 'Requires Cloud Pro')
     }
-    this.mode = 'studio'
     this.render()
   }
 
+  attachFileToPrompt(relPath: string): void {
+    const clean = relPath.trim()
+    if (!clean) return
+    if (!this.attachedTaskRefs.includes(clean)) {
+      this.attachedTaskRefs.push(clean)
+    }
+    this.render()
+    this.taskController?.focusComposer()
+  }
+
   focusAssistant(prefillPrompt?: string): void {
-    this.rightCollapsed = false
-    this.rightTab = 'assistant'
-    this.mode = 'studio'
     this.render()
     this.taskController?.focusComposer(prefillPrompt)
+  }
+
+  openCanvasWithSuggestedOrLauncher(): void {
+    if (!this.selectedFile && this.activeWorkspace) {
+      const files = this.treeEntries.filter(e => !e.is_dir)
+      const preferred =
+        files.find(f => /^readme\.md$/i.test(f.name)) ??
+        files.find(f => /\.(md|markdown|csv|tsv)$/i.test(f.name)) ??
+        null
+      if (preferred) {
+        this.selectedFile = preferred
+      }
+    }
+    this.canvasOpen = true
+    this.render()
   }
 
   async runIntentAction(intent?: OnboardingIntent): Promise<void> {
@@ -213,26 +237,36 @@ export class AegisCoreShell {
       return
     }
     const files = this.treeEntries.filter(e => !e.is_dir)
-    if (intent === 'write') {
-      const readme = files.find(f => /^readme\.md$/i.test(f.name)) ?? files.find(f => /\.(md|markdown)$/i.test(f.name))
-      if (readme) {
-        this.openExistingFile(readme.path)
-        return
-      }
-      await this.createAndOpenFile('notes/getting-started.md', SAMPLE_NOTE_CONTENT)
+    if (intent === 'code' || intent === 'agent') {
+      this.preferredRole = 'coder'
+      this.canvasOpen = false
+      this.render()
+      this.taskController?.focusComposer()
       return
     }
     if (intent === 'data') {
+      this.preferredRole = 'analyst'
       const dataset = files.find(f => /\.(csv|tsv)$/i.test(f.name))
       if (dataset) {
-        this.openExistingFile(dataset.path)
+        this.selectedFile = dataset
+        this.canvasOpen = true
+        this.render()
         return
       }
       await this.createAndOpenFile('data/sample_metrics.csv', SAMPLE_CSV_CONTENT)
       return
     }
-    if (intent === 'agent') {
-      this.focusAssistant('Summarize the structure and key files in this workspace.')
+    if (intent === 'write') {
+      this.preferredRole = 'writer'
+      const doc =
+        files.find(f => /^readme\.md$/i.test(f.name)) ?? files.find(f => /\.(md|markdown)$/i.test(f.name))
+      if (doc) {
+        this.selectedFile = doc
+        this.canvasOpen = true
+        this.render()
+        return
+      }
+      await this.createAndOpenFile('notes/draft.md', SAMPLE_NOTE_CONTENT)
     }
   }
 
@@ -264,7 +298,7 @@ export class AegisCoreShell {
 
   private renderApprovalsAndBell(): void {
     if (this.approvalBellEl) {
-      this.approvalBellEl.className = `aos-badge aos-bell-badge ${this.escalations.length > 0 ? 'warn has-pending' : 'muted'}`
+      this.approvalBellEl.className = `aos-btn aos-btn-sm ${this.escalations.length > 0 ? 'aos-bell-active' : ''}`
       this.approvalBellEl.innerHTML = `${iconHtml('bell')}<span>${this.escalations.length > 0 ? `Approvals (${this.escalations.length})` : 'Approvals'}</span>`
     }
     if (this.approvalsContainerEl) {
@@ -347,7 +381,7 @@ export class AegisCoreShell {
   private async refreshApprovals(): Promise<void> {
     const approvals = await this.opts.client.listApprovals().catch(() => ({ escalations: [] }))
     this.syncEscalationState(approvals.escalations, false)
-    this.renderApprovalsAndBell()
+    this.render()
   }
 
   private async reloadTree(): Promise<void> {
@@ -390,6 +424,9 @@ export class AegisCoreShell {
       onSelectFile: entry => {
         this.openExistingFile(entry.path)
       },
+      onAttachFile: relPath => {
+        this.attachFileToPrompt(relPath)
+      },
       onCreateFile: async rawPath => {
         await this.createAndOpenFile(rawPath, '')
       },
@@ -422,11 +459,11 @@ export class AegisCoreShell {
     }
   }
 
-  private renderSystemTab(container: HTMLElement): void {
+  private renderSystemDrawerBody(container: HTMLElement): void {
     const infoCard = document.createElement('div')
     infoCard.className = 'aos-system-card'
     infoCard.innerHTML = `
-      <div class="aos-panel-header"><span>Environment</span><span class="aos-badge ${this.sandboxHealthy ? 'ok' : 'warn'}">${this.sandboxDriver}</span></div>
+      <div class="aos-panel-header"><span>Sandbox &amp; Tier</span><span class="aos-badge ${this.sandboxHealthy ? 'ok' : 'warn'}">${this.sandboxDriver}</span></div>
       <div class="aos-system-row"><span class="aos-muted">Organization</span><code>${this.activeWorkspace?.org_id ?? 'personal'}</code></div>
       <div class="aos-system-row"><span class="aos-muted">Entitlement Tier</span><strong>${this.entitlements.dual_surface_crdt ? `Cloud ${this.entitlements.tier.toUpperCase()}` : 'Free Local'}</strong></div>
     `
@@ -488,7 +525,7 @@ export class AegisCoreShell {
         void this.openWorkspaceInteractive()
       },
       onCreateMarkdown: () => {
-        void this.createAndOpenFile('notes/getting-started.md', SAMPLE_NOTE_CONTENT)
+        void this.createAndOpenFile('notes/draft.md', SAMPLE_NOTE_CONTENT)
       },
       onOpenOrCreateDataset: () => {
         void this.runIntentAction('data')
@@ -513,9 +550,19 @@ export class AegisCoreShell {
     const shell = document.createElement('div')
     shell.className = 'aos-shell'
 
-    // Calm Top Bar
+    // Minimal CLI-parity Topbar
     const topbar = document.createElement('header')
     topbar.className = 'aos-topbar'
+
+    const toggleFilesBtn = document.createElement('button')
+    toggleFilesBtn.type = 'button'
+    toggleFilesBtn.className = 'aos-btn aos-btn-sm'
+    toggleFilesBtn.innerHTML = iconHtml('folder')
+    toggleFilesBtn.title = this.leftCollapsed ? 'Show workspace files' : 'Hide workspace files'
+    toggleFilesBtn.onclick = () => {
+      this.leftCollapsed = !this.leftCollapsed
+      this.render()
+    }
 
     const brand = document.createElement('div')
     brand.className = 'aos-brand'
@@ -542,18 +589,18 @@ export class AegisCoreShell {
     const openBtn = document.createElement('button')
     openBtn.type = 'button'
     openBtn.className = 'aos-btn aos-btn-sm'
-    openBtn.innerHTML = `${iconHtml('folderOpen')}<span>Open Folder</span>`
+    openBtn.innerHTML = `${iconHtml('folderOpen')}<span>+ Folder</span>`
     openBtn.onclick = () => {
       void this.openWorkspaceInteractive()
     }
 
-    topbar.append(brand, wsPicker, openBtn)
+    topbar.append(toggleFilesBtn, brand, wsPicker, openBtn)
 
     const childRepos = this.activeWorkspace?.child_repos ?? []
     if (childRepos.length > 0) {
       const repoPicker = document.createElement('select')
       repoPicker.className = 'aos-select aos-repo-select'
-      repoPicker.title = 'Scope files, diff, commit/rollback, and agent tasks to a child git repo'
+      repoPicker.title = 'Scope git diff/commit and tasks to a child repository'
       const allOpt = document.createElement('option')
       allOpt.value = ''
       allOpt.textContent = 'All repos'
@@ -576,25 +623,50 @@ export class AegisCoreShell {
     const statusRight = document.createElement('div')
     statusRight.className = 'aos-topbar-right'
 
-    if (this.opts.onOpenWizard) {
-      const guideBtn = document.createElement('button')
-      guideBtn.type = 'button'
-      guideBtn.className = 'aos-btn aos-btn-sm'
-      guideBtn.innerHTML = `${iconHtml('compass')}<span>Guide</span>`
-      guideBtn.title = 'Open interactive setup & workflow guide'
-      guideBtn.onclick = () => this.opts.onOpenWizard?.()
-      statusRight.appendChild(guideBtn)
+    const canvasToggleBtn = document.createElement('button')
+    canvasToggleBtn.type = 'button'
+    canvasToggleBtn.className = `aos-btn aos-btn-sm ${this.canvasOpen ? 'aos-btn-primary' : ''}`
+    canvasToggleBtn.innerHTML = `${iconHtml('layers')}<span>${this.canvasOpen ? 'Close Canvas' : 'Open Canvas'}</span>`
+    canvasToggleBtn.title = 'Open or close Heurion Doc / Data Studio Canvas alongside your workstream'
+    canvasToggleBtn.onclick = () => {
+      if (this.canvasOpen) {
+        this.canvasOpen = false
+        this.render()
+      } else {
+        this.openCanvasWithSuggestedOrLauncher()
+      }
     }
+    statusRight.appendChild(canvasToggleBtn)
 
     const approvalBell = document.createElement('button')
     approvalBell.type = 'button'
     this.approvalBellEl = approvalBell
     approvalBell.onclick = () => {
-      this.rightCollapsed = false
-      this.rightTab = 'approvals'
+      this.activeDrawer = this.activeDrawer === 'approvals' ? 'none' : 'approvals'
       this.render()
     }
+    this.renderApprovalsAndBell()
     statusRight.appendChild(approvalBell)
+
+    const sysBtn = document.createElement('button')
+    sysBtn.type = 'button'
+    sysBtn.className = `aos-btn aos-btn-sm ${this.activeDrawer === 'system' ? 'aos-btn-primary' : ''}`
+    sysBtn.innerHTML = `${iconHtml('server')}<span>CLIs</span>`
+    sysBtn.title = 'Manage BYO AI CLIs, Sandbox health, and Cloud Pro tier'
+    sysBtn.onclick = () => {
+      this.activeDrawer = this.activeDrawer === 'system' ? 'none' : 'system'
+      this.render()
+    }
+    statusRight.appendChild(sysBtn)
+
+    if (this.opts.onOpenWizard) {
+      const guideBtn = document.createElement('button')
+      guideBtn.type = 'button'
+      guideBtn.className = 'aos-btn aos-btn-sm'
+      guideBtn.innerHTML = `${iconHtml('compass')}<span>Guide</span>`
+      guideBtn.onclick = () => this.opts.onOpenWizard?.()
+      statusRight.appendChild(guideBtn)
+    }
 
     const effectiveTheme = resolveEffectiveTheme(getThemePref())
     const themeBtn = document.createElement('button')
@@ -613,7 +685,7 @@ export class AegisCoreShell {
     refreshBtn.type = 'button'
     refreshBtn.className = 'aos-btn aos-btn-sm'
     refreshBtn.innerHTML = iconHtml('refresh')
-    refreshBtn.title = 'Refresh workspace tree & daemon state'
+    refreshBtn.title = 'Refresh workspace files & daemon state'
     refreshBtn.onclick = () => {
       refreshBtn.disabled = true
       void this.refresh().finally(() => {
@@ -622,80 +694,75 @@ export class AegisCoreShell {
     }
     statusRight.appendChild(refreshBtn)
 
-    const panelToggleBtn = document.createElement('button')
-    panelToggleBtn.type = 'button'
-    panelToggleBtn.className = `aos-btn aos-btn-sm ${!this.rightCollapsed ? 'aos-btn-primary' : ''}`
-    panelToggleBtn.innerHTML = `${iconHtml('sparkles')}<span>${this.rightCollapsed ? 'Show Panel' : 'Hide Panel'}</span>`
-    panelToggleBtn.onclick = () => {
-      this.rightCollapsed = !this.rightCollapsed
-      this.render()
-    }
-    statusRight.appendChild(panelToggleBtn)
-
     topbar.appendChild(statusRight)
 
-    // Three-column body (Left = Files, Center = Studio/Launchpad, Right = Tabbed Inspector)
+    // Primary Body: Optional Left Files + Central Agent Workstream + Optional On-Demand Heurion Doc Canvas
     const main = document.createElement('div')
-    main.className = `aos-main-grid ${this.rightCollapsed ? 'is-right-collapsed' : ''}`
+    const layoutClasses = ['aos-main-grid']
+    if (this.leftCollapsed) layoutClasses.push('is-left-collapsed')
+    if (this.canvasOpen) layoutClasses.push('has-canvas')
+    main.className = layoutClasses.join(' ')
 
-    const left = document.createElement('aside')
-    left.className = 'aos-sidebar-left'
-    const treeContainer = document.createElement('div')
-    this.treeContainerEl = treeContainer
-    left.appendChild(treeContainer)
-    this.renderTreeOnly()
-
-    const center = document.createElement('section')
-    center.className = 'aos-center-stage'
-    if (this.opts.renderStudio) {
-      this.opts.renderStudio({
-        container: center,
-        workspace: this.activeWorkspace,
-        activeRepo: this.activeRepo,
-        file: this.selectedFile,
-        entitlements: this.entitlements,
-        onRequestUpgrade: reason => this.opts.onRequestUpgrade?.(reason),
-        quickActions: this.buildQuickActions(),
-      })
+    if (!this.leftCollapsed) {
+      const left = document.createElement('aside')
+      left.className = 'aos-sidebar-left'
+      const treeContainer = document.createElement('div')
+      this.treeContainerEl = treeContainer
+      left.appendChild(treeContainer)
+      this.renderTreeOnly()
+      main.appendChild(left)
+    } else {
+      this.treeContainerEl = null
     }
 
-    const right = document.createElement('aside')
-    right.className = 'aos-sidebar-right'
+    const workstreamPane = document.createElement('main')
+    workstreamPane.className = 'aos-workstream-pane'
 
-    const tabs = document.createElement('div')
-    tabs.className = 'aos-side-tabs'
-    const tabDefs: Array<{ id: RightSidebarTab; label: string }> = [
-      { id: 'assistant', label: 'AI Assistant' },
-      {
-        id: 'approvals',
-        label: this.escalations.length > 0 ? `Approvals (${this.escalations.length})` : 'Approvals',
-      },
-      { id: 'system', label: 'System' },
-    ]
-    for (const t of tabDefs) {
-      const tb = document.createElement('button')
-      tb.type = 'button'
-      tb.className = `aos-tab-btn ${this.rightTab === t.id ? 'is-active' : ''}`
-      tb.textContent = t.label
-      tb.onclick = () => {
-        this.rightTab = t.id
+    const workstreamInner = document.createElement('div')
+    workstreamInner.className = 'aos-workstream-inner'
+
+    if (this.escalations.length > 0) {
+      const alertBar = document.createElement('div')
+      alertBar.className = 'aos-inline-approval-bar'
+      alertBar.innerHTML = `${iconHtml('bell')}<span><strong>${this.escalations.length} action(s)</strong> awaiting your approval to run cleanly.</span>`
+      const reviewBtn = document.createElement('button')
+      reviewBtn.type = 'button'
+      reviewBtn.className = 'aos-btn aos-btn-sm aos-btn-primary'
+      reviewBtn.textContent = 'Review'
+      reviewBtn.onclick = () => {
+        this.activeDrawer = 'approvals'
         this.render()
       }
-      tabs.appendChild(tb)
+      alertBar.appendChild(reviewBtn)
+      workstreamInner.appendChild(alertBar)
     }
 
-    const tabBody = document.createElement('div')
-    tabBody.className = 'aos-side-tab-body'
-
-    const approvalsHost = document.createElement('div')
-    this.approvalsContainerEl = approvalsHost
-    this.renderApprovalsAndBell()
-
-    if (this.rightTab === 'assistant') {
+    if (!this.activeWorkspace) {
+      const noWsCard = document.createElement('div')
+      noWsCard.className = 'aos-workstream-empty'
+      noWsCard.innerHTML = `
+        ${brandMarkSvg()}
+        <div class="aos-eyebrow">CLI-PARITY SANDBOX WORKBENCH</div>
+        <h2 class="aos-serif-title">Pick a workspace folder to begin</h2>
+        <p class="aos-muted">Just like launching Aegis CLI in your terminal — select a folder to start coding, analyzing data, or writing with Heurion Doc Canvas on demand.</p>
+      `
+      const openPrimaryBtn = document.createElement('button')
+      openPrimaryBtn.type = 'button'
+      openPrimaryBtn.className = 'aos-btn aos-btn-primary aos-btn-lg'
+      openPrimaryBtn.innerHTML = `${iconHtml('folderOpen')}<span>Open Local Folder</span>`
+      openPrimaryBtn.onclick = () => {
+        void this.openWorkspaceInteractive()
+      }
+      noWsCard.appendChild(openPrimaryBtn)
+      workstreamInner.appendChild(noWsCard)
+    } else {
+      const streamHost = document.createElement('div')
+      streamHost.className = 'aos-workstream-host'
       this.taskController = new TaskStreamController({
-        container: tabBody,
+        container: streamHost,
         client: this.opts.client,
-        workspaceId: this.activeWorkspace?.id ?? null,
+        workspaceId: this.activeWorkspace.id,
+        workspaceName: this.activeWorkspace.name,
         activeRepo: this.activeRepo,
         agents: this.agents,
         activeFilePath: this.selectedFile?.path ?? null,
@@ -703,21 +770,129 @@ export class AegisCoreShell {
         artifacts: this.workspaceArtifacts,
         attachedRefs: this.attachedTaskRefs,
         tasks: this.taskHistory,
+        initialRole: this.preferredRole,
+        onRoleChanged: role => {
+          this.preferredRole = role
+        },
+        onOpenCanvas: this.opts.renderStudio
+          ? () => {
+              this.openCanvasWithSuggestedOrLauncher()
+            }
+          : undefined,
       })
       this.taskController.render()
-    } else if (this.rightTab === 'approvals') {
-      tabBody.appendChild(approvalsHost)
-    } else {
-      this.renderSystemTab(tabBody)
+      workstreamInner.appendChild(streamHost)
     }
 
-    right.append(tabs, tabBody)
+    workstreamPane.appendChild(workstreamInner)
+    main.appendChild(workstreamPane)
 
-    main.append(left, center)
-    if (!this.rightCollapsed) {
-      main.appendChild(right)
+    if (this.canvasOpen && this.opts.renderStudio) {
+      const canvasPane = document.createElement('section')
+      canvasPane.className = 'aos-canvas-pane'
+
+      const canvasHeader = document.createElement('div')
+      canvasHeader.className = 'aos-canvas-header'
+      const titleWrap = document.createElement('div')
+      titleWrap.className = 'aos-canvas-title'
+      titleWrap.innerHTML = `${iconHtml('layers')}<strong>Heurion Doc Canvas</strong>`
+      if (this.selectedFile) {
+        const badge = document.createElement('code')
+        badge.className = 'aos-badge info'
+        badge.textContent = this.selectedFile.path
+        titleWrap.appendChild(badge)
+      }
+
+      const canvasActions = document.createElement('div')
+      canvasActions.className = 'aos-canvas-actions'
+      if (this.activeWorkspace) {
+        const newNoteBtn = document.createElement('button')
+        newNoteBtn.type = 'button'
+        newNoteBtn.className = 'aos-btn aos-btn-sm'
+        newNoteBtn.innerHTML = `${iconHtml('plus')}<span>New Note</span>`
+        newNoteBtn.onclick = () => {
+          void this.createAndOpenFile('notes/draft.md', SAMPLE_NOTE_CONTENT)
+        }
+        canvasActions.appendChild(newNoteBtn)
+      }
+      const closeCanvasBtn = document.createElement('button')
+      closeCanvasBtn.type = 'button'
+      closeCanvasBtn.className = 'aos-btn aos-btn-sm'
+      closeCanvasBtn.innerHTML = iconHtml('x')
+      closeCanvasBtn.title = 'Close Canvas & return to full-width Workstream'
+      closeCanvasBtn.onclick = () => {
+        this.canvasOpen = false
+        this.render()
+      }
+      canvasActions.appendChild(closeCanvasBtn)
+
+      canvasHeader.append(titleWrap, canvasActions)
+
+      const canvasBody = document.createElement('div')
+      canvasBody.className = 'aos-canvas-body'
+      this.opts.renderStudio({
+        container: canvasBody,
+        workspace: this.activeWorkspace,
+        activeRepo: this.activeRepo,
+        file: this.selectedFile,
+        entitlements: this.entitlements,
+        onRequestUpgrade: reason => this.opts.onRequestUpgrade?.(reason),
+        quickActions: this.buildQuickActions(),
+      })
+
+      canvasPane.append(canvasHeader, canvasBody)
+      main.appendChild(canvasPane)
     }
+
     shell.append(topbar, main)
+
+    if (this.activeDrawer !== 'none') {
+      const backdrop = document.createElement('div')
+      backdrop.className = 'aos-drawer-backdrop'
+      backdrop.onclick = ev => {
+        if (ev.target === backdrop) {
+          this.activeDrawer = 'none'
+          this.render()
+        }
+      }
+
+      const drawer = document.createElement('aside')
+      drawer.className = 'aos-drawer-panel'
+
+      const dHead = document.createElement('div')
+      dHead.className = 'aos-canvas-header'
+      const dTitle = document.createElement('strong')
+      dTitle.textContent =
+        this.activeDrawer === 'approvals' ? 'Policy Approvals' : 'CLIs, Sandbox & Tier'
+      const dClose = document.createElement('button')
+      dClose.type = 'button'
+      dClose.className = 'aos-btn aos-btn-sm'
+      dClose.innerHTML = iconHtml('x')
+      dClose.onclick = () => {
+        this.activeDrawer = 'none'
+        this.render()
+      }
+      dHead.append(dTitle, dClose)
+
+      const dBody = document.createElement('div')
+      dBody.className = 'aos-side-tab-body'
+      if (this.activeDrawer === 'approvals') {
+        const approvalsHost = document.createElement('div')
+        this.approvalsContainerEl = approvalsHost
+        this.renderApprovalsAndBell()
+        dBody.appendChild(approvalsHost)
+      } else {
+        this.approvalsContainerEl = null
+        this.renderSystemDrawerBody(dBody)
+      }
+
+      drawer.append(dHead, dBody)
+      backdrop.appendChild(drawer)
+      shell.appendChild(backdrop)
+    } else {
+      this.approvalsContainerEl = null
+    }
+
     root.appendChild(shell)
   }
 }
