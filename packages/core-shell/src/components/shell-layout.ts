@@ -1,7 +1,7 @@
 import { renderAgentOnboarding } from './agent-onboarding.ts'
 import { renderApprovalPanel } from './approval-modal.ts'
 import { TaskStreamController } from './task-stream.ts'
-import { renderWorkspaceTree } from './workspace-tree.ts'
+import { renderWorkspaceTree, upsertSyncRule } from './workspace-tree.ts'
 import {
   applySyncModeFilter,
   type AegisDaemonClient,
@@ -29,9 +29,11 @@ export interface CoreShellOptions {
   root: HTMLElement
   client: AegisDaemonClient
   entitlements?: DesktopEntitlements
+  approvalPollIntervalMs?: number
   renderStudio?: (ctx: StudioMountContext) => void
   onOpenWorkspacePrompt?: () => Promise<string | null>
   onRequestUpgrade?: (reason: string) => void
+  onNewEscalation?: (esc: PendingEscalation) => void
 }
 
 export class AegisCoreShell {
@@ -42,14 +44,22 @@ export class AegisCoreShell {
   private workspaces: DesktopWorkspace[] = []
   private activeWorkspace: DesktopWorkspace | null = null
   private activeRepo: string | null = null
+  private rawTreeEntries: WorkspaceTreeEntry[] = []
   private treeEntries: WorkspaceTreeEntry[] = []
   private selectedFile: WorkspaceTreeEntry | null = null
+  private collapsedDirs = new Set<string>()
+  private treeSearchQuery = ''
   private sandboxHealthy = false
   private sandboxDriver = 'checking'
   private escalations: PendingEscalation[] = []
+  private knownEscalationIds = new Set<string>()
   private mcpEntries: McpInventoryEntry[] = []
   private taskHistory: DesktopTaskRecord[] = []
   private taskController: TaskStreamController | null = null
+  private approvalPollTimer: number | null = null
+  private treeContainerEl: HTMLElement | null = null
+  private approvalsContainerEl: HTMLElement | null = null
+  private approvalBellEl: HTMLButtonElement | null = null
 
   constructor(opts: CoreShellOptions) {
     this.opts = opts
@@ -62,7 +72,66 @@ export class AegisCoreShell {
 
   setEntitlements(entitlements: DesktopEntitlements): void {
     this.entitlements = entitlements
+    this.treeEntries = applySyncModeFilter(this.rawTreeEntries, this.entitlements)
     this.render()
+  }
+
+  dispose(): void {
+    if (this.approvalPollTimer !== null && typeof window !== 'undefined') {
+      window.clearInterval(this.approvalPollTimer)
+      this.approvalPollTimer = null
+    }
+    this.taskController?.dispose()
+    this.taskController = null
+  }
+
+  startLivePolling(): void {
+    const intervalMs = this.opts.approvalPollIntervalMs ?? 5000
+    if (intervalMs <= 0 || typeof window === 'undefined' || this.approvalPollTimer !== null) return
+    this.approvalPollTimer = window.setInterval(() => {
+      void this.pollApprovalsInBackground()
+    }, intervalMs)
+  }
+
+  private syncEscalationState(next: PendingEscalation[], notifyNew: boolean): boolean {
+    const prevIds = this.escalations.map(e => e.escalation_id).join(',')
+    const nextIds = next.map(e => e.escalation_id).join(',')
+    if (notifyNew) {
+      for (const esc of next) {
+        if (!this.knownEscalationIds.has(esc.escalation_id)) {
+          this.opts.onNewEscalation?.(esc)
+        }
+      }
+    }
+    for (const esc of next) {
+      this.knownEscalationIds.add(esc.escalation_id)
+    }
+    this.escalations = next
+    return prevIds !== nextIds
+  }
+
+  private async pollApprovalsInBackground(): Promise<void> {
+    const approvals = await this.opts.client.listApprovals().catch(() => null)
+    if (!approvals) return
+    const changed = this.syncEscalationState(approvals.escalations, true)
+    if (changed) {
+      this.renderApprovalsAndBell()
+    }
+  }
+
+  private renderApprovalsAndBell(): void {
+    if (this.approvalBellEl) {
+      this.approvalBellEl.className = `aos-badge aos-bell-badge ${this.escalations.length > 0 ? 'warn has-pending' : 'muted'}`
+      this.approvalBellEl.textContent = `🔔 Approvals (${this.escalations.length})`
+    }
+    if (this.approvalsContainerEl) {
+      renderApprovalPanel({
+        container: this.approvalsContainerEl,
+        escalations: this.escalations,
+        client: this.opts.client,
+        onDecided: () => this.refreshApprovals(),
+      })
+    }
   }
 
   async refresh(): Promise<void> {
@@ -79,12 +148,13 @@ export class AegisCoreShell {
     }
     this.agents = agents
     this.workspaces = workspaces
-    this.escalations = approvals.escalations
+    this.syncEscalationState(approvals.escalations, false)
     this.mcpEntries = inventory.entries
     if (this.activeWorkspace) {
       const updated = workspaces.find(w => w.id === this.activeWorkspace?.id)
       if (updated) this.activeWorkspace = updated
     }
+    this.startLivePolling()
     if (!this.activeWorkspace && workspaces.length > 0) {
       await this.selectWorkspace(workspaces[0]!)
       return
@@ -100,6 +170,7 @@ export class AegisCoreShell {
     this.activeWorkspace = workspace
     this.activeRepo = null
     this.selectedFile = null
+    this.collapsedDirs.clear()
     await this.reloadTree()
   }
 
@@ -117,15 +188,98 @@ export class AegisCoreShell {
 
   private async refreshApprovals(): Promise<void> {
     const approvals = await this.opts.client.listApprovals().catch(() => ({ escalations: [] }))
-    this.escalations = approvals.escalations
-    this.render()
+    this.syncEscalationState(approvals.escalations, false)
+    this.renderApprovalsAndBell()
   }
 
   private async reloadTree(): Promise<void> {
     if (!this.activeWorkspace) return
     const tree = await this.opts.client.workspaceTree(this.activeWorkspace.id, this.activeRepo)
+    this.rawTreeEntries = tree.entries
     this.treeEntries = applySyncModeFilter(tree.entries, this.entitlements)
     this.render()
+  }
+
+  private renderTreeOnly(): void {
+    if (!this.treeContainerEl) return
+    const active = typeof document !== 'undefined' ? document.activeElement : null
+    const wasSearchFocused =
+      active instanceof HTMLInputElement && active.classList.contains('aos-tree-search')
+    const selStart = wasSearchFocused ? active.selectionStart : null
+    const selEnd = wasSearchFocused ? active.selectionEnd : null
+
+    renderWorkspaceTree({
+      container: this.treeContainerEl,
+      entries: this.treeEntries,
+      syncPolicy: this.activeWorkspace?.sync_policy ?? { default_mode: 'local_only', rules: [] },
+      entitlements: this.entitlements,
+      selectedPath: this.selectedFile?.path ?? null,
+      collapsedDirs: this.collapsedDirs,
+      searchQuery: this.treeSearchQuery,
+      onSearchChange: query => {
+        this.treeSearchQuery = query
+        this.renderTreeOnly()
+      },
+      onToggleDir: dirPath => {
+        if (this.collapsedDirs.has(dirPath)) {
+          this.collapsedDirs.delete(dirPath)
+        } else {
+          this.collapsedDirs.add(dirPath)
+        }
+        this.renderTreeOnly()
+      },
+      onSelectFile: entry => {
+        const decision = resolveFormatAccess(entry.name, this.entitlements)
+        this.selectedFile = entry
+        if (!decision.allowed) {
+          this.opts.onRequestUpgrade?.(decision.reason ?? 'Requires Cloud Pro')
+        }
+        this.mode = 'studio'
+        this.render()
+      },
+      onCreateFile: async rawPath => {
+        if (!this.activeWorkspace) return
+        const clean = rawPath.replace(/^\/+/, '').replace(/^\.\//, '')
+        const relPath =
+          this.activeRepo && !clean.startsWith(`${this.activeRepo}/`)
+            ? `${this.activeRepo}/${clean}`
+            : clean
+        await this.opts.client.writeWorkspaceFile(this.activeWorkspace.id, relPath, '')
+        await this.reloadTree()
+        const createdEntry = this.treeEntries.find(e => !e.is_dir && e.path === relPath)
+        if (createdEntry) {
+          this.selectedFile = createdEntry
+          this.mode = 'studio'
+          this.render()
+        }
+      },
+      onToggleDefaultSync: async mode => {
+        if (!this.activeWorkspace) return
+        const updated = await this.opts.client.updateSyncPolicy(this.activeWorkspace.id, {
+          default_mode: mode,
+          rules: this.activeWorkspace.sync_policy.rules,
+        })
+        this.activeWorkspace.sync_policy = updated
+        await this.reloadTree()
+      },
+      onSetFolderSyncRule: async (dirPath, mode) => {
+        if (!this.activeWorkspace) return
+        const nextPolicy = upsertSyncRule(this.activeWorkspace.sync_policy, dirPath, mode)
+        const updated = await this.opts.client.updateSyncPolicy(this.activeWorkspace.id, nextPolicy)
+        this.activeWorkspace.sync_policy = updated
+        await this.reloadTree()
+      },
+    })
+
+    if (wasSearchFocused && this.treeContainerEl) {
+      const nextInput = this.treeContainerEl.querySelector<HTMLInputElement>('.aos-tree-search')
+      if (nextInput) {
+        nextInput.focus()
+        if (selStart !== null && selEnd !== null) {
+          nextInput.setSelectionRange(selStart, selEnd)
+        }
+      }
+    }
   }
 
   render(): void {
@@ -223,8 +377,27 @@ export class AegisCoreShell {
       modeGroup.appendChild(b)
     }
 
+    const refreshBtn = document.createElement('button')
+    refreshBtn.type = 'button'
+    refreshBtn.className = 'aos-btn aos-btn-sm'
+    refreshBtn.textContent = '↻ Refresh'
+    refreshBtn.onclick = () => {
+      refreshBtn.disabled = true
+      void this.refresh().finally(() => {
+        refreshBtn.disabled = false
+      })
+    }
+
     const statusRight = document.createElement('div')
     statusRight.className = 'aos-topbar-right'
+
+    const approvalBell = document.createElement('button')
+    approvalBell.type = 'button'
+    this.approvalBellEl = approvalBell
+    approvalBell.onclick = () => {
+      this.approvalsContainerEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+
     const sandboxPill = document.createElement('span')
     sandboxPill.className = `aos-badge ${this.sandboxHealthy ? 'ok' : 'warn'}`
     sandboxPill.textContent = `Sandbox: ${this.sandboxDriver}`
@@ -241,8 +414,8 @@ export class AegisCoreShell {
       )
     }
 
-    statusRight.append(sandboxPill, tierBtn)
-    topbar.append(openBtn, modeGroup, statusRight)
+    statusRight.append(approvalBell, sandboxPill, tierBtn)
+    topbar.append(openBtn, modeGroup, refreshBtn, statusRight)
 
     // Three-column body
     const main = document.createElement('div')
@@ -251,34 +424,11 @@ export class AegisCoreShell {
     const left = document.createElement('aside')
     left.className = 'aos-sidebar-left'
     const treeContainer = document.createElement('div')
+    this.treeContainerEl = treeContainer
     const agentsContainer = document.createElement('div')
     left.append(treeContainer, agentsContainer)
 
-    renderWorkspaceTree({
-      container: treeContainer,
-      entries: this.treeEntries,
-      syncPolicy: this.activeWorkspace?.sync_policy ?? { default_mode: 'local_only', rules: [] },
-      entitlements: this.entitlements,
-      selectedPath: this.selectedFile?.path ?? null,
-      onSelectFile: entry => {
-        const decision = resolveFormatAccess(entry.name, this.entitlements)
-        this.selectedFile = entry
-        if (!decision.allowed) {
-          this.opts.onRequestUpgrade?.(decision.reason ?? 'Requires Cloud Pro')
-        }
-        this.mode = 'studio'
-        this.render()
-      },
-      onToggleDefaultSync: async mode => {
-        if (!this.activeWorkspace) return
-        const updated = await this.opts.client.updateSyncPolicy(this.activeWorkspace.id, {
-          default_mode: mode,
-          rules: this.activeWorkspace.sync_policy.rules,
-        })
-        this.activeWorkspace.sync_policy = updated
-        await this.reloadTree()
-      },
-    })
+    this.renderTreeOnly()
 
     renderAgentOnboarding({
       container: agentsContainer,
@@ -317,12 +467,8 @@ export class AegisCoreShell {
     const right = document.createElement('aside')
     right.className = 'aos-sidebar-right'
     const approvalsEl = document.createElement('div')
-    renderApprovalPanel({
-      container: approvalsEl,
-      escalations: this.escalations,
-      client: this.opts.client,
-      onDecided: () => this.refreshApprovals(),
-    })
+    this.approvalsContainerEl = approvalsEl
+    this.renderApprovalsAndBell()
 
     const tasksPreview = document.createElement('div')
     if (this.mode === 'studio') {

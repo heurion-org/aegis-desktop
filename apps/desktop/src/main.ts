@@ -245,16 +245,26 @@ function renderStandaloneConnectScreen(root: HTMLElement, onConnected: (conn: De
   root.appendChild(wrap)
 }
 
+let activeShell: AegisCoreShell | null = null
+
 async function mountWithConnection(root: HTMLElement, conn: DesktopConnection): Promise<void> {
+  activeShell?.dispose()
   const client = new AegisDaemonClient(conn)
   let entitlements = loadSavedEntitlements()
-  let shellRef: AegisCoreShell | null = null
-  const bridge = createDesktopWritingBridge(client, () => shellRef?.getActiveRepo() ?? null)
+  const bridge = createDesktopWritingBridge(client, () => activeShell?.getActiveRepo() ?? null)
 
   const shell = new AegisCoreShell({
     root,
     client,
     entitlements,
+    approvalPollIntervalMs: 5000,
+    onNewEscalation: esc => {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        new Notification('Aegis Approval Required', {
+          body: `${esc.agent_id}: ${esc.action} -> ${esc.target_resource}`,
+        })
+      }
+    },
     onOpenWorkspacePrompt: async () => {
       const tauri = window.__TAURI_INTERNALS__
       if (tauri?.invoke) {
@@ -283,7 +293,7 @@ async function mountWithConnection(root: HTMLElement, conn: DesktopConnection): 
       })
     },
   })
-  shellRef = shell
+  activeShell = shell
 
   await shell.refresh()
 }

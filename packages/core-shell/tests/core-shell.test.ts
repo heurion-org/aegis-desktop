@@ -14,6 +14,7 @@ import {
   type DesktopEntitlements,
 } from '../src/entitlements.ts'
 import { selectAgentForRole } from '../src/roles.ts'
+import { filterTreeEntries, upsertSyncRule } from '../src/components/workspace-tree.ts'
 
 test('Free tier permits local .md and coding files while gating rich CRDT formats to Cloud Pro', () => {
   const md = resolveFormatAccess('notes/architecture.md', DEFAULT_FREE_ENTITLEMENTS)
@@ -239,4 +240,31 @@ test('AegisDaemonClient matches Rust wire shapes for agents, sync-policy, 3-laye
   const decided = await client.decideApproval('esc-1', 'approve', 900)
   assert.equal(decided.decision, 'approved')
   assert.ok(calls.every(c => c.auth === 'Bearer aht_secret'))
+})
+
+test('upsertSyncRule adds, overrides, normalizes slashes, and removes default-matching rules', () => {
+  const base = { default_mode: 'cloud_crdt' as const, rules: [] }
+  const added = upsertSyncRule(base, '/raw_data/**', 'local_only')
+  assert.deepEqual(added.rules, [{ path_prefix: 'raw_data', mode: 'local_only' }])
+
+  const overridden = upsertSyncRule(added, './raw_data/', 'cloud_blob')
+  assert.deepEqual(overridden.rules, [{ path_prefix: 'raw_data', mode: 'cloud_blob' }])
+
+  const removed = upsertSyncRule(overridden, 'raw_data', 'cloud_crdt')
+  assert.deepEqual(removed.rules, [])
+})
+
+test('filterTreeEntries keeps matching files and their ancestor directories', () => {
+  const entries: WorkspaceTreeEntry[] = [
+    { path: 'docs', name: 'docs', is_dir: true, ext: null, sync_mode: 'cloud_crdt', tier_required: 'free' },
+    { path: 'docs/specs', name: 'specs', is_dir: true, ext: null, sync_mode: 'cloud_crdt', tier_required: 'free' },
+    { path: 'docs/specs/v1.md', name: 'v1.md', is_dir: false, ext: 'md', sync_mode: 'cloud_crdt', tier_required: 'free' },
+    { path: 'src', name: 'src', is_dir: true, ext: null, sync_mode: 'local_only', tier_required: 'free' },
+    { path: 'src/main.rs', name: 'main.rs', is_dir: false, ext: 'rs', sync_mode: 'local_only', tier_required: 'free' },
+  ]
+  const filtered = filterTreeEntries(entries, 'V1.MD')
+  assert.deepEqual(
+    filtered.map(e => e.path),
+    ['docs', 'docs/specs', 'docs/specs/v1.md'],
+  )
 })

@@ -12,9 +12,16 @@ export interface TaskStreamOptions {
   onTaskUpdated?: (task: DesktopTaskRecord) => void
 }
 
+const ROLE_ICONS: Record<AgentRole, string> = {
+  writer: '✍️',
+  coder: '💻',
+  analyst: '📊',
+  reviewer: '✨',
+}
+
 export class TaskStreamController {
   private readonly opts: TaskStreamOptions
-  private role: AgentRole = 'coder'
+  private role: AgentRole = 'writer'
   private overrideAgentId = ''
   private tasks: DesktopTaskRecord[]
   private disposed = false
@@ -68,22 +75,23 @@ export class TaskStreamController {
     const composer = document.createElement('form')
     composer.className = 'aos-task-composer'
 
+    const roleChips = document.createElement('div')
+    roleChips.className = 'aos-role-chips'
+    for (const r of ROLE_CATALOG) {
+      const chip = document.createElement('button')
+      chip.type = 'button'
+      chip.className = `aos-role-chip ${r.id === this.role ? 'is-active' : ''}`
+      chip.title = r.description
+      chip.textContent = `${ROLE_ICONS[r.id]} ${r.label}`
+      chip.onclick = () => {
+        this.role = r.id
+        this.render()
+      }
+      roleChips.appendChild(chip)
+    }
+
     const controls = document.createElement('div')
     controls.className = 'aos-task-controls'
-
-    const roleSelect = document.createElement('select')
-    roleSelect.className = 'aos-select'
-    for (const r of ROLE_CATALOG) {
-      const opt = document.createElement('option')
-      opt.value = r.id
-      opt.textContent = r.label
-      opt.selected = r.id === this.role
-      roleSelect.appendChild(opt)
-    }
-    roleSelect.onchange = () => {
-      this.role = roleSelect.value as AgentRole
-      this.render()
-    }
 
     const agentSelect = document.createElement('select')
     agentSelect.className = 'aos-select'
@@ -103,7 +111,11 @@ export class TaskStreamController {
       this.overrideAgentId = agentSelect.value
     }
 
-    controls.append(roleSelect, agentSelect)
+    const roleDesc = document.createElement('small')
+    roleDesc.className = 'aos-muted'
+    roleDesc.textContent = ROLE_CATALOG.find(r => r.id === this.role)?.description ?? ''
+
+    controls.append(agentSelect)
 
     const textarea = document.createElement('textarea')
     textarea.className = 'aos-textarea'
@@ -118,7 +130,7 @@ export class TaskStreamController {
     submitRow.className = 'aos-task-submit'
     const hint = document.createElement('small')
     hint.className = 'aos-muted'
-    hint.textContent = resolved.fallbackReason ?? 'Isolated CoW task stream ready.'
+    hint.textContent = resolved.fallbackReason ?? roleDesc.textContent
 
     const submitBtn = document.createElement('button')
     submitBtn.type = 'submit'
@@ -127,7 +139,7 @@ export class TaskStreamController {
     submitBtn.disabled = !workspaceId
 
     submitRow.append(hint, submitBtn)
-    composer.append(controls, textarea, submitRow)
+    composer.append(roleChips, controls, textarea, submitRow)
 
     composer.onsubmit = async ev => {
       ev.preventDefault()
@@ -181,6 +193,16 @@ export class TaskStreamController {
           detailEl.className = 'aos-muted'
           detailEl.textContent = s.detail
           li.appendChild(detailEl)
+        }
+        if (s.raw_log && s.raw_log.trim().length > 0) {
+          const details = document.createElement('details')
+          details.className = 'aos-raw-log'
+          const summary = document.createElement('summary')
+          summary.textContent = 'View execution details'
+          const pre = document.createElement('pre')
+          pre.textContent = s.raw_log
+          details.append(summary, pre)
+          li.appendChild(details)
         }
         stepsEl.appendChild(li)
       }
