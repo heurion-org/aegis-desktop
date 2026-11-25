@@ -1,5 +1,5 @@
 import { normalizeExt, resolveFormatAccess, type DesktopEntitlements } from '@aegis/core-shell'
-import type { WritingHostBridge } from './bridge.ts'
+import type { ArtifactEmbedRef, WritingHostBridge } from './bridge.ts'
 
 export interface ProCanvasOptions {
   container: HTMLElement
@@ -129,6 +129,11 @@ export function extractBlockOutline(content: string): BlockOutlineItem[] {
   return items
 }
 
+function formatProArtifactBlock(art: ArtifactEmbedRef): string {
+  const body = art.previewMarkdown?.trim() || ''
+  return `\n### ${art.title} {#art_${art.id}}\n${body}\n`
+}
+
 /**
  * Cloud Pro Dual-Surface CRDT view for `.docx` / `.pptx` / `.pdf` / `.tex`.
  * Free tier shows an explicit upgrade card + read-only preview outline (zero Cloud Yjs sync / edits).
@@ -182,6 +187,7 @@ export async function mountProDualSurfaceCanvas(opts: ProCanvasOptions): Promise
 
   let baselineContent = rawContent
   let currentContent = rawContent
+  const turnHistory: string[] = []
   let activeTab: ProSurfaceTab = 'rendered'
 
   const wrapper = document.createElement('div')
@@ -215,6 +221,10 @@ export async function mountProDualSurfaceCanvas(opts: ProCanvasOptions): Promise
   actionGroup.append(tabGroup, embedBtn, saveBtn, revertBtn)
   toolbar.append(label, actionGroup)
 
+  const artifactPicker = document.createElement('div')
+  artifactPicker.className = 'sw-artifact-picker'
+  artifactPicker.hidden = true
+
   const mountStage = document.createElement('div')
   mountStage.className = 'sw-dual-stage'
 
@@ -224,6 +234,10 @@ export async function mountProDualSurfaceCanvas(opts: ProCanvasOptions): Promise
     ext === 'pptx'
       ? '16:9 Slide Visual Deck + Dual-Surface CRDT Addressable Blocks'
       : 'Semantic Dual-Surface CRDT Document + Annotated {#id} Inspector'
+
+  const embeddedSvgHost = document.createElement('div')
+  embeddedSvgHost.className = 'sw-embedded-svg-host'
+  embeddedSvgHost.hidden = true
 
   const bodyStage = document.createElement('div')
   bodyStage.className = 'sw-dual-body'
@@ -357,23 +371,61 @@ export async function mountProDualSurfaceCanvas(opts: ProCanvasOptions): Promise
   }
 
   embedBtn.onclick = async () => {
+    artifactPicker.hidden = !artifactPicker.hidden
+    if (artifactPicker.hidden) return
+    artifactPicker.innerHTML = ''
     const artifacts = (await bridge.listArtifactEmbeds?.(workspaceId)) ?? []
-    canvasHint.textContent = artifacts.length
-      ? `Available Data Studio artifacts: ${artifacts.map(a => a.title).join(', ')}`
-      : 'No V1.5 Data Studio artifacts available yet.'
+    if (artifacts.length === 0) {
+      const empty = document.createElement('small')
+      empty.className = 'aos-muted'
+      empty.textContent =
+        'No Data Studio artifacts available yet. Publish one from any .csv/.tsv/.json dataset first.'
+      artifactPicker.appendChild(empty)
+      return
+    }
+    for (const art of artifacts) {
+      const row = document.createElement('div')
+      row.className = 'sw-artifact-row'
+      const lbl = document.createElement('span')
+      lbl.textContent = `${art.title} (v${art.version} · ${art.kind})`
+      const btn = document.createElement('button')
+      btn.type = 'button'
+      btn.className = 'aos-btn aos-btn-sm aos-btn-primary'
+      btn.textContent = 'Embed'
+      btn.onclick = () => {
+        turnHistory.push(currentContent)
+        currentContent = currentContent + formatProArtifactBlock(art)
+        if (art.svgMarkup) {
+          embeddedSvgHost.hidden = false
+          embeddedSvgHost.innerHTML = art.svgMarkup
+        }
+        canvasHint.textContent = `Embedded ${art.title} (v${art.version})`
+        artifactPicker.hidden = true
+        renderSurface()
+      }
+      row.append(lbl, btn)
+      artifactPicker.appendChild(row)
+    }
   }
 
   revertBtn.onclick = async () => {
-    if (!bridge.revertTurn) {
-      canvasHint.textContent = 'Connect Cloud Collab Gateway to enable turn-level CRDT revert.'
+    if (bridge.revertTurn) {
+      const res = await bridge.revertTurn(filePath, 'latest')
+      canvasHint.textContent = res.reverted ? `Reverted turn on ${res.docId}` : 'Turn already reverted.'
       return
     }
-    const res = await bridge.revertTurn(filePath, 'latest')
-    canvasHint.textContent = res.reverted ? `Reverted turn on ${res.docId}` : 'Turn already reverted.'
+    const prev = turnHistory.pop()
+    if (prev !== undefined) {
+      currentContent = prev
+      canvasHint.textContent = 'Reverted last local Canvas turn.'
+      renderSurface()
+    } else {
+      canvasHint.textContent = 'No local Canvas turns to revert.'
+    }
   }
 
   renderSurface()
-  mountStage.append(canvasHint, bodyStage)
-  wrapper.append(toolbar, mountStage)
+  mountStage.append(canvasHint, embeddedSvgHost, bodyStage)
+  wrapper.append(toolbar, artifactPicker, mountStage)
   container.appendChild(wrapper)
 }

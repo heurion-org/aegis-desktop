@@ -1,8 +1,5 @@
 /**
- * V1.5 Data Studio interface stub.
- * Keeps the `DataArtifactProducer` and `ArtifactEmbed` contracts strongly typed in V1
- * so `@aegis/studio-writing` and `@heurion/doc-core` can embed table/chart snapshots
- * without bundling a full notebook/spreadsheet runtime in V1.
+ * V1.5 Data Studio interfaces & offline tabular analytics / ArtifactEmbed runtime.
  */
 export interface DataArtifact {
   id: string
@@ -32,3 +29,7 @@ export function createStubDataProducer(): DataArtifactProducer {
     },
   }
 }
+
+export * from './tabular.ts'
+export * from './producer.ts'
+export * from './data-view.ts'

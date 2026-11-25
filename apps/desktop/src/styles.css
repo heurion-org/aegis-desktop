@@ -474,3 +474,106 @@ body {
   flex-direction: column;
   gap: 8px;
 }
+
+.sw-md-preview table,
+.sd-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.sw-md-preview th,
+.sw-md-preview td,
+.sd-table th,
+.sd-table td {
+  border: 1px solid var(--border);
+  padding: 5px 8px;
+  text-align: left;
+}
+
+.sd-table th {
+  background: #161c26;
+  cursor: pointer;
+  user-select: none;
+}
+
+.sd-studio {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+}
+
+.sd-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 8px;
+}
+
+.sd-stat-card {
+  background: #11161f;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sd-chart-box,
+.sw-artifact-picker,
+.sw-embedded-svg-host {
+  background: #11161f;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sd-table-wrap {
+  flex: 1;
+  min-height: 140px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #0b0e14;
+}
+
+.sd-artifact-row,
+.sw-artifact-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  padding: 4px 0;
+}
+
+.aos-ref-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 6px;
+}
+
+.aos-ref-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(76, 141, 255, 0.14);
+  border: 1px solid rgba(76, 141, 255, 0.35);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+.aos-ref-chip button {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 12px;
+}

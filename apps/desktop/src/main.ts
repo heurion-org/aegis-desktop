@@ -8,7 +8,12 @@ import {
   type DesktopConnection,
   type DesktopEntitlements,
 } from '@aegis/core-shell'
-import { createStubDataProducer } from '@aegis/studio-data'
+import {
+  createLocalDataArtifactProducer,
+  isDataFile,
+  mountDataStudio,
+  type LocalDataArtifactProducer,
+} from '@aegis/studio-data'
 import { mountWritingStudio, type WritingHostBridge } from '@aegis/studio-writing'
 
 declare global {
@@ -61,9 +66,9 @@ function loadSavedEntitlements(): DesktopEntitlements {
 
 function createDesktopWritingBridge(
   client: AegisDaemonClient,
+  dataProducer: LocalDataArtifactProducer,
   getActiveRepo: () => string | null,
 ): WritingHostBridge {
-  const dataProducer = createStubDataProducer()
   return {
     async readTextFile(workspaceId, relPath) {
       const res = await client.readWorkspaceFile(workspaceId, relPath)
@@ -95,6 +100,7 @@ function createDesktopWritingBridge(
         version: a.version,
         sourcePath: a.sourcePath,
         previewMarkdown: a.previewMarkdown,
+        svgMarkup: a.svgMarkup,
       }))
     },
   }
@@ -250,14 +256,17 @@ let activeShell: AegisCoreShell | null = null
 async function mountWithConnection(root: HTMLElement, conn: DesktopConnection): Promise<void> {
   activeShell?.dispose()
   const client = new AegisDaemonClient(conn)
+  const dataProducer = createLocalDataArtifactProducer()
+  const rawTextOverrides = new Set<string>()
   let entitlements = loadSavedEntitlements()
-  const bridge = createDesktopWritingBridge(client, () => activeShell?.getActiveRepo() ?? null)
+  const bridge = createDesktopWritingBridge(client, dataProducer, () => activeShell?.getActiveRepo() ?? null)
 
   const shell = new AegisCoreShell({
     root,
     client,
     entitlements,
     approvalPollIntervalMs: 5000,
+    listArtifacts: wsId => dataProducer.listArtifacts(wsId),
     onNewEscalation: esc => {
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         new Notification('Aegis Approval Required', {
@@ -283,11 +292,30 @@ async function mountWithConnection(root: HTMLElement, conn: DesktopConnection): 
       })
     },
     renderStudio: ctx => {
+      const wsId = ctx.workspace?.id ?? null
+      const filePath = ctx.file?.path ?? null
+      if (wsId && filePath && isDataFile(filePath) && !rawTextOverrides.has(filePath)) {
+        void mountDataStudio({
+          container: ctx.container,
+          workspaceId: wsId,
+          filePath,
+          readTextFile: (id, rel) => bridge.readTextFile(id, rel),
+          producer: dataProducer,
+          onArtifactPublished: () => {
+            void activeShell?.refreshArtifacts()
+          },
+          onOpenRawText: () => {
+            rawTextOverrides.add(filePath)
+            activeShell?.render()
+          },
+        })
+        return
+      }
       void mountWritingStudio({
         container: ctx.container,
         bridge,
-        workspaceId: ctx.workspace?.id ?? null,
-        filePath: ctx.file?.path ?? null,
+        workspaceId: wsId,
+        filePath,
         entitlements: ctx.entitlements,
         onRequestUpgrade: ctx.onRequestUpgrade,
       })

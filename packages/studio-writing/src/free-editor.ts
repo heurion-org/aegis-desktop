@@ -1,4 +1,4 @@
-import type { WritingHostBridge } from './bridge.ts'
+import type { ArtifactEmbedRef, WritingHostBridge } from './bridge.ts'
 
 export interface FreeMarkdownEditorOptions {
   container: HTMLElement
@@ -36,9 +36,19 @@ export function renderMarkdownPreviewHtml(markdown: string): string {
   const out: string[] = []
   let inFence = false
   let fenceLines: string[] = []
+  let inTable = false
 
-  for (const rawLine of lines) {
+  const closeTable = () => {
+    if (inTable) {
+      out.push('</tbody></table>')
+      inTable = false
+    }
+  }
+
+  for (let idx = 0; idx < lines.length; idx++) {
+    const rawLine = lines[idx]!
     if (rawLine.trimStart().startsWith('```')) {
+      closeTable()
       if (!inFence) {
         inFence = true
         fenceLines = []
@@ -52,6 +62,31 @@ export function renderMarkdownPreviewHtml(markdown: string): string {
     if (inFence) {
       fenceLines.push(rawLine)
       continue
+    }
+
+    const trimmed = rawLine.trim()
+    if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+      const cells = trimmed
+        .slice(1, -1)
+        .split('|')
+        .map(c => c.trim())
+      const nextLine = (lines[idx + 1] ?? '').trim()
+      const isSeparatorNext =
+        nextLine.startsWith('|') &&
+        nextLine.endsWith('|') &&
+        /^[\s|:-]+$/.test(nextLine)
+      if (!inTable && isSeparatorNext) {
+        out.push(`<table><thead><tr>${cells.map(c => `<th>${inlineFmt(escapeHtml(c))}</th>`).join('')}</tr></thead><tbody>`)
+        inTable = true
+        idx += 1 // Skip separator row
+        continue
+      }
+      if (inTable) {
+        out.push(`<tr>${cells.map(c => `<td>${inlineFmt(escapeHtml(c))}</td>`).join('')}</tr>`)
+        continue
+      }
+    } else {
+      closeTable()
     }
 
     const line = escapeHtml(rawLine)
@@ -73,10 +108,17 @@ export function renderMarkdownPreviewHtml(markdown: string): string {
       out.push(`<p>${inlineFmt(line)}</p>`)
     }
   }
+  closeTable()
   if (inFence && fenceLines.length > 0) {
     out.push(`<pre><code>${escapeHtml(fenceLines.join('\n'))}</code></pre>`)
   }
   return out.join('\n')
+}
+
+export function formatArtifactMarkdownEmbed(art: ArtifactEmbedRef): string {
+  const src = art.sourcePath ? ` source:${art.sourcePath}` : ''
+  const body = art.previewMarkdown?.trim() || `_${art.kind} snapshot_`
+  return `\n<!-- artifact:${art.id} v${art.version}${src} -->\n### ${art.title}\n\n${body}\n`
 }
 
 export async function mountFreeMarkdownEditor(opts: FreeMarkdownEditorOptions): Promise<void> {
@@ -134,6 +176,15 @@ export async function mountFreeMarkdownEditor(opts: FreeMarkdownEditorOptions): 
     actions.appendChild(viewGroup)
   }
 
+  let embedBtn: HTMLButtonElement | null = null
+  if (isMd && bridge.listArtifactEmbeds) {
+    embedBtn = document.createElement('button')
+    embedBtn.type = 'button'
+    embedBtn.className = 'aos-btn aos-btn-sm'
+    embedBtn.textContent = '+ Embed Artifact'
+    actions.appendChild(embedBtn)
+  }
+
   const saveBtn = document.createElement('button')
   saveBtn.type = 'button'
   saveBtn.className = 'aos-btn aos-btn-sm aos-btn-primary'
@@ -156,6 +207,10 @@ export async function mountFreeMarkdownEditor(opts: FreeMarkdownEditorOptions): 
 
   actions.append(saveBtn, diffBtn, acceptBtn, rollbackBtn)
   toolbar.append(titleGroup, actions)
+
+  const artifactPicker = document.createElement('div')
+  artifactPicker.className = 'sw-artifact-picker'
+  artifactPicker.hidden = true
 
   const panes = document.createElement('div')
   panes.className = 'sw-split-panes'
@@ -220,6 +275,46 @@ export async function mountFreeMarkdownEditor(opts: FreeMarkdownEditorOptions): 
       showStatus(err instanceof Error ? err.message : String(err))
     } finally {
       saveBtn.disabled = false
+    }
+  }
+
+  if (embedBtn && bridge.listArtifactEmbeds) {
+    embedBtn.onclick = async () => {
+      artifactPicker.hidden = !artifactPicker.hidden
+      if (artifactPicker.hidden) return
+      artifactPicker.innerHTML = ''
+      const list = (await bridge.listArtifactEmbeds?.(workspaceId)) ?? []
+      if (list.length === 0) {
+        const empty = document.createElement('small')
+        empty.className = 'aos-muted'
+        empty.textContent =
+          'No Data Artifacts published yet. Open any .csv / .tsv / data .json file in Data Studio to publish one.'
+        artifactPicker.appendChild(empty)
+        return
+      }
+      for (const art of list) {
+        const row = document.createElement('div')
+        row.className = 'sw-artifact-row'
+        const lbl = document.createElement('span')
+        lbl.textContent = `${art.title} (v${art.version} · ${art.kind})`
+        const insertBtn = document.createElement('button')
+        insertBtn.type = 'button'
+        insertBtn.className = 'aos-btn aos-btn-sm aos-btn-primary'
+        insertBtn.textContent = 'Insert'
+        insertBtn.onclick = () => {
+          const snippet = formatArtifactMarkdownEmbed(art)
+          const pos = textarea.selectionStart ?? textarea.value.length
+          textarea.value =
+            textarea.value.slice(0, pos) + snippet + textarea.value.slice(pos)
+          if (!preview.hidden) {
+            preview.innerHTML = renderMarkdownPreviewHtml(textarea.value)
+          }
+          updateMetaAndDirty()
+          artifactPicker.hidden = true
+        }
+        row.append(lbl, insertBtn)
+        artifactPicker.appendChild(row)
+      }
     }
   }
 
@@ -309,6 +404,6 @@ export async function mountFreeMarkdownEditor(opts: FreeMarkdownEditorOptions): 
   panes.append(textarea, preview)
   applyViewMode()
   updateMetaAndDirty()
-  wrapper.append(toolbar, panes, metaFooter, diffDrawer)
+  wrapper.append(toolbar, artifactPicker, panes, metaFooter, diffDrawer)
   container.appendChild(wrapper)
 }

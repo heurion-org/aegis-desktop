@@ -11,13 +11,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          path: aegis-desktop
-
-      - uses: actions/checkout@v4
-        with:
-          repository: heurion-org/heurion-doc
-          path: heurion-doc
 
       - uses: pnpm/action-setup@v4
         with:
@@ -27,14 +20,11 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-          cache-dependency-path: aegis-desktop/pnpm-lock.yaml
 
       - name: Install dependencies
-        working-directory: aegis-desktop
         run: pnpm install --frozen-lockfile
 
       - name: Typecheck, test, and build packages & apps
-        working-directory: aegis-desktop
         run: |
           pnpm -r typecheck
           pnpm -r test

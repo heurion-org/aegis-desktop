@@ -5,6 +5,7 @@ export interface ArtifactEmbedRef {
   version: number
   sourcePath?: string
   previewMarkdown?: string
+  svgMarkup?: string
 }
 
 export interface WorkspaceDiffSummary {

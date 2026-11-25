@@ -1,19 +1,36 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createInMemoryWritingBridge } from '../src/bridge.ts'
-import { isMarkdownFile, renderMarkdownPreviewHtml } from '../src/free-editor.ts'
+import {
+  formatArtifactMarkdownEmbed,
+  isMarkdownFile,
+  renderMarkdownPreviewHtml,
+} from '../src/free-editor.ts'
 import { computeWordDiff, extractBlockOutline } from '../src/pro-canvas.ts'
 
-test('renderMarkdownPreviewHtml escapes HTML and renders headings, lists, blockquotes, code fences, and bold text', () => {
+test('renderMarkdownPreviewHtml escapes HTML and renders headings, lists, blockquotes, tables, code fences, and bold text', () => {
   const html = renderMarkdownPreviewHtml(
-    '# Title\n> quote **em**\n```ts\nconst x = "<script>"\n```\n- item **bold** and `code` <script>x</script>',
+    '# Title\n> quote **em**\n```ts\nconst x = "<script>"\n```\n| colA | colB |\n| --- | --- |\n| v1 | **v2** |\n- item **bold** and `code` <script>x</script>',
   )
   assert.match(html, /<h1>Title<\/h1>/)
   assert.match(html, /<blockquote>quote <strong>em<\/strong><\/blockquote>/)
   assert.match(html, /<pre><code>const x = "&lt;script&gt;"<\/code><\/pre>/)
+  assert.match(html, /<table><thead><tr><th>colA<\/th><th>colB<\/th><\/tr><\/thead><tbody>/)
+  assert.match(html, /<td><strong>v2<\/strong><\/td>/)
   assert.match(html, /<li>item <strong>bold<\/strong> and <code>code<\/code> &lt;script&gt;x&lt;\/script&gt;<\/li>/)
   assert.equal(isMarkdownFile('notes/design.md'), true)
   assert.equal(isMarkdownFile('crates/main.rs'), false)
+
+  const embed = formatArtifactMarkdownEmbed({
+    id: 'art_1',
+    title: 'Sales Table',
+    kind: 'table_snapshot',
+    version: 2,
+    sourcePath: 'raw_data/sales.csv',
+    previewMarkdown: '| k | v |\n| --- | --- |\n| rev | 42 |',
+  })
+  assert.match(embed, /<!-- artifact:art_1 v2 source:raw_data\/sales\.csv -->/)
+  assert.match(embed, /### Sales Table/)
 })
 
 test('createInMemoryWritingBridge reads and writes local workspace documents without Tauri', async () => {

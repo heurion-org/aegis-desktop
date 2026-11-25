@@ -1,5 +1,16 @@
 import { ROLE_CATALOG, selectAgentForRole, type AgentRole } from '../roles.ts'
-import type { AegisDaemonClient, DesktopAgentStatus, DesktopTaskRecord } from '../daemon-client.ts'
+import type {
+  AegisDaemonClient,
+  DesktopAgentStatus,
+  DesktopTaskRecord,
+  WorkspaceTreeEntry,
+} from '../daemon-client.ts'
+
+export interface TaskArtifactRef {
+  id: string
+  title: string
+  sourcePath?: string
+}
 
 export interface TaskStreamOptions {
   container: HTMLElement
@@ -8,6 +19,9 @@ export interface TaskStreamOptions {
   activeRepo?: string | null
   agents: DesktopAgentStatus[]
   activeFilePath: string | null
+  workspaceFiles?: WorkspaceTreeEntry[]
+  artifacts?: TaskArtifactRef[]
+  attachedRefs?: string[]
   tasks?: DesktopTaskRecord[]
   onTaskUpdated?: (task: DesktopTaskRecord) => void
 }
@@ -23,12 +37,14 @@ export class TaskStreamController {
   private readonly opts: TaskStreamOptions
   private role: AgentRole = 'writer'
   private overrideAgentId = ''
+  private attachedRefs: string[]
   private tasks: DesktopTaskRecord[]
   private disposed = false
 
   constructor(opts: TaskStreamOptions) {
     this.opts = opts
     this.tasks = opts.tasks ?? []
+    this.attachedRefs = opts.attachedRefs ?? []
   }
 
   setAgents(agents: DesktopAgentStatus[]): void {
@@ -67,9 +83,25 @@ export class TaskStreamController {
     }
   }
 
+  private addRef(refPath: string): void {
+    const clean = refPath.trim()
+    if (!clean || this.attachedRefs.includes(clean)) return
+    this.attachedRefs.push(clean)
+    this.render()
+  }
+
+  private removeRef(refPath: string): void {
+    const idx = this.attachedRefs.indexOf(refPath)
+    if (idx >= 0) {
+      this.attachedRefs.splice(idx, 1)
+      this.render()
+    }
+  }
+
   render(): void {
     if (this.disposed) return
-    const { container, agents, workspaceId, activeRepo, activeFilePath } = this.opts
+    const { container, agents, workspaceId, activeRepo, activeFilePath, workspaceFiles = [], artifacts = [] } =
+      this.opts
     container.innerHTML = ''
 
     const composer = document.createElement('form')
@@ -111,11 +143,58 @@ export class TaskStreamController {
       this.overrideAgentId = agentSelect.value
     }
 
-    const roleDesc = document.createElement('small')
-    roleDesc.className = 'aos-muted'
-    roleDesc.textContent = ROLE_CATALOG.find(r => r.id === this.role)?.description ?? ''
+    const refPicker = document.createElement('select')
+    refPicker.className = 'aos-select'
+    refPicker.disabled = !workspaceId
+    const refDefault = document.createElement('option')
+    refDefault.value = ''
+    refDefault.textContent = '+ @File / @Artifact'
+    refPicker.appendChild(refDefault)
 
-    controls.append(agentSelect)
+    for (const art of artifacts) {
+      const opt = document.createElement('option')
+      opt.value = art.sourcePath ? art.sourcePath : `artifact:${art.id}`
+      opt.textContent = `📎 ${art.title}`
+      refPicker.appendChild(opt)
+    }
+    for (const entry of workspaceFiles) {
+      if (entry.is_dir) continue
+      const opt = document.createElement('option')
+      opt.value = entry.path
+      opt.textContent = `${entry.sync_mode === 'local_only' ? '💻 ' : ''}${entry.path}`
+      refPicker.appendChild(opt)
+    }
+    refPicker.onchange = () => {
+      if (refPicker.value) {
+        this.addRef(refPicker.value)
+      }
+    }
+
+    controls.append(agentSelect, refPicker)
+
+    const refBar = document.createElement('div')
+    refBar.className = 'aos-ref-bar'
+    const effectiveRefs = new Set<string>(this.attachedRefs)
+    if (activeFilePath) effectiveRefs.add(activeFilePath)
+
+    if (effectiveRefs.size > 0) {
+      for (const refPath of effectiveRefs) {
+        const chip = document.createElement('span')
+        chip.className = 'aos-ref-chip'
+        chip.textContent = `@${refPath}`
+        if (this.attachedRefs.includes(refPath)) {
+          const rm = document.createElement('button')
+          rm.type = 'button'
+          rm.textContent = '×'
+          rm.title = `Remove ${refPath}`
+          rm.onclick = () => this.removeRef(refPath)
+          chip.appendChild(rm)
+        }
+        refBar.appendChild(chip)
+      }
+    }
+
+    const roleDesc = ROLE_CATALOG.find(r => r.id === this.role)?.description ?? ''
 
     const textarea = document.createElement('textarea')
     textarea.className = 'aos-textarea'
@@ -130,7 +209,7 @@ export class TaskStreamController {
     submitRow.className = 'aos-task-submit'
     const hint = document.createElement('small')
     hint.className = 'aos-muted'
-    hint.textContent = resolved.fallbackReason ?? roleDesc.textContent
+    hint.textContent = resolved.fallbackReason ?? roleDesc
 
     const submitBtn = document.createElement('button')
     submitBtn.type = 'submit'
@@ -139,7 +218,11 @@ export class TaskStreamController {
     submitBtn.disabled = !workspaceId
 
     submitRow.append(hint, submitBtn)
-    composer.append(roleChips, controls, textarea, submitRow)
+    composer.append(roleChips, controls)
+    if (effectiveRefs.size > 0) {
+      composer.appendChild(refBar)
+    }
+    composer.append(textarea, submitRow)
 
     composer.onsubmit = async ev => {
       ev.preventDefault()
@@ -147,13 +230,14 @@ export class TaskStreamController {
       if (!prompt || !workspaceId) return
       textarea.value = ''
       submitBtn.disabled = true
+      const docRefs = [...effectiveRefs]
       try {
         const created = await this.opts.client.startTask(workspaceId, {
           role: this.role,
           agent_override: this.overrideAgentId || null,
           repo: activeRepo ?? null,
           prompt,
-          doc_refs: activeFilePath ? [activeFilePath] : [],
+          doc_refs: docRefs,
         })
         this.tasks.unshift(created)
         this.render()

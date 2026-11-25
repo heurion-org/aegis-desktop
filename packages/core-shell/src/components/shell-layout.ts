@@ -1,6 +1,6 @@
 import { renderAgentOnboarding } from './agent-onboarding.ts'
 import { renderApprovalPanel } from './approval-modal.ts'
-import { TaskStreamController } from './task-stream.ts'
+import { TaskStreamController, type TaskArtifactRef } from './task-stream.ts'
 import { renderWorkspaceTree, upsertSyncRule } from './workspace-tree.ts'
 import {
   applySyncModeFilter,
@@ -34,6 +34,7 @@ export interface CoreShellOptions {
   onOpenWorkspacePrompt?: () => Promise<string | null>
   onRequestUpgrade?: (reason: string) => void
   onNewEscalation?: (esc: PendingEscalation) => void
+  listArtifacts?: (workspaceId: string) => Promise<TaskArtifactRef[]>
 }
 
 export class AegisCoreShell {
@@ -46,6 +47,8 @@ export class AegisCoreShell {
   private activeRepo: string | null = null
   private rawTreeEntries: WorkspaceTreeEntry[] = []
   private treeEntries: WorkspaceTreeEntry[] = []
+  private workspaceArtifacts: TaskArtifactRef[] = []
+  private attachedTaskRefs: string[] = []
   private selectedFile: WorkspaceTreeEntry | null = null
   private collapsedDirs = new Set<string>()
   private treeSearchQuery = ''
@@ -171,7 +174,22 @@ export class AegisCoreShell {
     this.activeRepo = null
     this.selectedFile = null
     this.collapsedDirs.clear()
+    this.attachedTaskRefs = []
+    await this.reloadArtifactsOnly()
     await this.reloadTree()
+  }
+
+  async refreshArtifacts(): Promise<void> {
+    await this.reloadArtifactsOnly()
+    this.render()
+  }
+
+  private async reloadArtifactsOnly(): Promise<void> {
+    if (!this.activeWorkspace || !this.opts.listArtifacts) {
+      this.workspaceArtifacts = []
+      return
+    }
+    this.workspaceArtifacts = await this.opts.listArtifacts(this.activeWorkspace.id).catch(() => [])
   }
 
   async selectRepo(repoRelPath: string | null): Promise<void> {
@@ -197,6 +215,7 @@ export class AegisCoreShell {
     const tree = await this.opts.client.workspaceTree(this.activeWorkspace.id, this.activeRepo)
     this.rawTreeEntries = tree.entries
     this.treeEntries = applySyncModeFilter(tree.entries, this.entitlements)
+    await this.reloadArtifactsOnly()
     this.render()
   }
 
@@ -459,6 +478,9 @@ export class AegisCoreShell {
         activeRepo: this.activeRepo,
         agents: this.agents,
         activeFilePath: this.selectedFile?.path ?? null,
+        workspaceFiles: this.treeEntries,
+        artifacts: this.workspaceArtifacts,
+        attachedRefs: this.attachedTaskRefs,
         tasks: this.taskHistory,
       })
       this.taskController.render()
@@ -479,6 +501,9 @@ export class AegisCoreShell {
         activeRepo: this.activeRepo,
         agents: this.agents,
         activeFilePath: this.selectedFile?.path ?? null,
+        workspaceFiles: this.treeEntries,
+        artifacts: this.workspaceArtifacts,
+        attachedRefs: this.attachedTaskRefs,
         tasks: this.taskHistory,
       })
       this.taskController.render()
