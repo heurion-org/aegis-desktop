@@ -2,7 +2,7 @@
 pkgname=aegis-desktop
 pkgver=0.1.0
 pkgrel=1
-_aegis_os_ver=0.12.1
+_aegis_os_ver=0.12.2
 pkgdesc='Local CoW Sandbox Workbench, Writing Studio, and Data Studio for Aegis OS'
 arch=('x86_64' 'aarch64')
 url='https://github.com/heurion-org/aegis-desktop'

@@ -299,10 +299,11 @@ test('vector SVG icon helpers and onboarding wizard trigger work cleanly without
 })
 
 test('isSemverAtLeast enforces minimum daemon version cleanly', () => {
-  assert.equal(isSemverAtLeast('0.12.1', MIN_RECOMMENDED_DAEMON_VERSION), true)
+  assert.equal(isSemverAtLeast('0.12.2', MIN_RECOMMENDED_DAEMON_VERSION), true)
   assert.equal(isSemverAtLeast('0.12.10', MIN_RECOMMENDED_DAEMON_VERSION), true)
   assert.equal(isSemverAtLeast('0.13.0', MIN_RECOMMENDED_DAEMON_VERSION), true)
   assert.equal(isSemverAtLeast('1.0.0', MIN_RECOMMENDED_DAEMON_VERSION), true)
+  assert.equal(isSemverAtLeast('0.12.1', MIN_RECOMMENDED_DAEMON_VERSION), false)
   assert.equal(isSemverAtLeast('0.12.0', MIN_RECOMMENDED_DAEMON_VERSION), false)
   assert.equal(isSemverAtLeast('', MIN_RECOMMENDED_DAEMON_VERSION), false)
   assert.equal(isSemverAtLeast(null, MIN_RECOMMENDED_DAEMON_VERSION), false)

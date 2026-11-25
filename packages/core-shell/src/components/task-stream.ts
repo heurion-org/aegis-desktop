@@ -1,12 +1,13 @@
 import { ROLE_CATALOG, selectAgentForRole, type AgentRole } from '../roles.ts'
 import { brandMarkSvg, iconHtml, type IconName } from '../icons.ts'
 import { escapeHtml, renderChatMarkdownHtml } from '../markdown.ts'
-import type {
-  AegisDaemonClient,
-  DesktopAgentStatus,
-  DesktopTaskRecord,
-  DesktopTaskStep,
-  WorkspaceTreeEntry,
+import {
+  MIN_RECOMMENDED_DAEMON_VERSION,
+  type AegisDaemonClient,
+  type DesktopAgentStatus,
+  type DesktopTaskRecord,
+  type DesktopTaskStep,
+  type WorkspaceTreeEntry,
 } from '../daemon-client.ts'
 
 export interface TaskArtifactRef {
@@ -402,7 +403,7 @@ export class TaskStreamController {
         if (this.opts.daemonOutdated && task.status === 'queued') {
           const warnEl = document.createElement('div')
           warnEl.className = 'aos-inline-hint-warn'
-          warnEl.innerHTML = `${iconHtml('alertTriangle')}<span>Sidecar is older than v0.12.1 and keeps tasks queued. Upgrade aegis-os to run prompts live.</span>`
+          warnEl.innerHTML = `${iconHtml('alertTriangle')}<span>Sidecar is older than v${MIN_RECOMMENDED_DAEMON_VERSION} and keeps tasks queued. Upgrade aegis-os to run prompts live.</span>`
           answerBox.appendChild(warnEl)
         }
 

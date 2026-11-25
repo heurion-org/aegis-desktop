@@ -379,7 +379,7 @@ export class AegisDaemonClient {
   }
 }
 
-export const MIN_RECOMMENDED_DAEMON_VERSION = '0.12.1'
+export const MIN_RECOMMENDED_DAEMON_VERSION = '0.12.2'
 
 function parseSemverParts(raw: string | null | undefined): [number, number, number] | null {
   if (!raw) return null
