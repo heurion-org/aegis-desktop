@@ -617,8 +617,8 @@ install_from_source() {
   if [[ "$DRY_RUN" -eq 1 ]]; then
     info "[dry-run] fetch ${DESKTOP_REPO}@${ref} tarball into temporary directory"
     info "[dry-run] stage sidecar at apps/desktop/src-tauri/binaries/aegis-os-${TARGET_TRIPLE}"
-    info "[dry-run] run: pnpm install --frozen-lockfile --ignore-scripts && pnpm --filter @aegis/desktop build"
-    info "[dry-run] run: CARGO_TARGET_DIR=.../target cargo build --release --manifest-path apps/desktop/src-tauri/Cargo.toml"
+    info "[dry-run] run: pnpm install --frozen-lockfile --ignore-scripts"
+    info "[dry-run] run: CARGO_TARGET_DIR=.../target pnpm --filter @aegis/desktop tauri build --no-bundle --ci"
     info "[dry-run] install binaries under ${HOME}/.local/lib/aegis-desktop and launcher at ${HOME}/.local/bin/aegis-desktop"
     return 0
   fi
@@ -637,15 +637,20 @@ install_from_source() {
     cd "$src_dir"
     export CARGO_TARGET_DIR="${src_dir}/target"
     pnpm install --frozen-lockfile --ignore-scripts
-    pnpm --filter @aegis/desktop build
-    cargo build --release --manifest-path apps/desktop/src-tauri/Cargo.toml
+    pnpm --filter @aegis/desktop tauri build --no-bundle --ci
   )
+
+  local built_bin="${src_dir}/target/release/aegis-desktop"
+  if [[ ! -x "$built_bin" ]]; then
+    built_bin="${src_dir}/apps/desktop/src-tauri/target/release/aegis-desktop"
+  fi
+  [[ -x "$built_bin" ]] || abort "Built binary not found after tauri build."
 
   local lib_dir="${HOME}/.local/lib/aegis-desktop"
   local bin_dir="${HOME}/.local/bin"
   mkdir -p "$lib_dir" "$bin_dir"
 
-  install -m 755 "${src_dir}/target/release/aegis-desktop" "${lib_dir}/aegis-desktop"
+  install -m 755 "$built_bin" "${lib_dir}/aegis-desktop"
   install -m 755 "$sidecar_dest" "${lib_dir}/aegis-os"
   ln -sf "${lib_dir}/aegis-desktop" "${bin_dir}/aegis-desktop"
 

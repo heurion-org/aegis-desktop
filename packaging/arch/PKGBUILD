@@ -55,8 +55,7 @@ build() {
   export CARGO_TARGET_DIR="${srcdir}/aegis-desktop-desktop-v${pkgver}/target"
   pnpm -r typecheck
   pnpm -r test
-  pnpm --filter @aegis/desktop build
-  cargo build --release --manifest-path apps/desktop/src-tauri/Cargo.toml
+  pnpm --filter @aegis/desktop tauri build --no-bundle --ci
 }
 
 package() {
