@@ -1969,6 +1969,16 @@ pre,
   gap: 8px;
 }
 
+.aos-wizard-ws-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.aos-wizard-ws-row .aos-wizard-ws-item {
+  flex: 1;
+}
+
 .aos-wizard-ws-item {
   width: 100%;
   display: flex;

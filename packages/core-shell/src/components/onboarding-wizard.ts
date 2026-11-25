@@ -89,6 +89,7 @@ export interface OnboardingWizardOptions {
   cloudYjsSync: boolean
   onPickFolder?: () => Promise<string | null>
   onWorkspaceSelected: (ws: DesktopWorkspace) => Promise<void> | void
+  onRemoveWorkspace?: (wsId: string) => Promise<void> | void
   onAgentsUpdated?: (agents: DesktopAgentStatus[]) => void
   onThemeChanged?: () => void
   onComplete: (intent?: OnboardingIntent) => void
@@ -254,6 +255,8 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
         for (const ws of workspaces) {
           const isCurrent = activeWorkspace?.id === ws.id
           const repoCount = ws.child_repos?.length ?? 0
+          const row = document.createElement('div')
+          row.className = 'aos-wizard-ws-row'
           const btn = document.createElement('button')
           btn.type = 'button'
           btn.className = `aos-wizard-ws-item ${isCurrent ? 'is-selected' : ''}`
@@ -273,7 +276,32 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
             step = 1
             paint()
           }
-          wsList.appendChild(btn)
+          row.appendChild(btn)
+
+          if (opts.onRemoveWorkspace) {
+            const rmBtn = document.createElement('button')
+            rmBtn.type = 'button'
+            rmBtn.className = 'aos-btn aos-btn-sm'
+            rmBtn.innerHTML = iconHtml('x')
+            rmBtn.title = `Remove ${ws.name} from recent workspaces`
+            rmBtn.onclick = async ev => {
+              ev.stopPropagation()
+              rmBtn.disabled = true
+              try {
+                await opts.onRemoveWorkspace?.(ws.id)
+                workspaces = workspaces.filter(w => w.id !== ws.id)
+                if (activeWorkspace?.id === ws.id) {
+                  activeWorkspace = null
+                }
+                paint()
+              } catch (err) {
+                errorMessage = err instanceof Error ? err.message : String(err)
+                paint()
+              }
+            }
+            row.appendChild(rmBtn)
+          }
+          wsList.appendChild(row)
         }
         existingSection.appendChild(wsList)
         body.appendChild(existingSection)

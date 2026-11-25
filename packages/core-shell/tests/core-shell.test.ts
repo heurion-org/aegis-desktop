@@ -415,4 +415,22 @@ test('AegisDaemonClient sends CoW session_id and expected_diff_hash on commit an
   assert.equal(bodies[1]?.body.session_id, 'ses_123')
 })
 
+test('AegisDaemonClient sends DELETE /v1/workspaces/:id on removeWorkspace', async () => {
+  const seen: Array<{ url: string; method: string; auth: string | null }> = []
+  const client = new AegisDaemonClient(
+    { protocol: 'aos-desktop/v1', port: 43123, base_url: 'http://127.0.0.1:43123', human_token: 'aht_tok' },
+    async (input, init) => {
+      const headers = new Headers(init?.headers)
+      seen.push({ url: input, method: init?.method ?? 'GET', auth: headers.get('Authorization') })
+      return new Response(JSON.stringify({ ok: true, removed_id: 'ws_123' }))
+    },
+  )
+  const res = await client.removeWorkspace('ws_123')
+  assert.equal(res.ok, true)
+  assert.equal(res.removed_id, 'ws_123')
+  assert.equal(seen[0]?.method, 'DELETE')
+  assert.equal(seen[0]?.auth, 'Bearer aht_tok')
+  assert.match(seen[0]?.url ?? '', /\/v1\/workspaces\/ws_123$/)
+})
+
 

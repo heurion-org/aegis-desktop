@@ -58,6 +58,29 @@ export interface CoreShellOptions {
   listArtifacts?: (workspaceId: string) => Promise<TaskArtifactRef[]>
 }
 
+const LAST_WORKSPACE_KEY = 'aegis.desktop.last_workspace_id'
+
+function loadLastWorkspaceId(): string | null {
+  try {
+    return typeof window !== 'undefined' ? window.localStorage.getItem(LAST_WORKSPACE_KEY) : null
+  } catch {
+    return null
+  }
+}
+
+function saveLastWorkspaceId(wsId: string | null): void {
+  try {
+    if (typeof window === 'undefined') return
+    if (wsId) {
+      window.localStorage.setItem(LAST_WORKSPACE_KEY, wsId)
+    } else {
+      window.localStorage.removeItem(LAST_WORKSPACE_KEY)
+    }
+  } catch {
+    // Ignore storage errors
+  }
+}
+
 const UPDATE_COMMAND =
   '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/heurion-org/aegis-desktop/main/install.sh)"'
 
@@ -381,12 +404,25 @@ export class AegisCoreShell {
     this.mcpEntries = inventory.entries
     if (this.activeWorkspace) {
       const updated = workspaces.find(w => w.id === this.activeWorkspace?.id)
-      if (updated) this.activeWorkspace = updated
+      if (updated) {
+        this.activeWorkspace = updated
+      } else {
+        this.activeWorkspace = null
+        this.activeRepo = null
+        this.selectedFile = null
+        this.rawTreeEntries = []
+        this.treeEntries = []
+        this.activeDiff = null
+      }
     }
     this.startLivePolling()
     if (!this.activeWorkspace && workspaces.length > 0) {
-      await this.selectWorkspace(workspaces[0]!)
-      return
+      const savedId = loadLastWorkspaceId()
+      const matched = savedId ? workspaces.find(w => w.id === savedId) : null
+      if (matched) {
+        await this.selectWorkspace(matched)
+        return
+      }
     }
     if (this.activeWorkspace) {
       await this.reloadTree()
@@ -397,6 +433,7 @@ export class AegisCoreShell {
 
   async selectWorkspace(workspace: DesktopWorkspace): Promise<void> {
     this.activeWorkspace = workspace
+    saveLastWorkspaceId(workspace.id)
     this.activeRepo = null
     this.selectedFile = null
     this.collapsedDirs.clear()
@@ -407,6 +444,23 @@ export class AegisCoreShell {
     this.rollbackConfirmOpen = false
     this.vcsFeedback = ''
     await this.reloadTree()
+  }
+
+  async removeWorkspaceById(wsId: string): Promise<void> {
+    await this.opts.client.removeWorkspace(wsId)
+    if (this.activeWorkspace?.id === wsId) {
+      this.activeWorkspace = null
+      this.activeRepo = null
+      this.selectedFile = null
+      this.rawTreeEntries = []
+      this.treeEntries = []
+      this.activeDiff = null
+      saveLastWorkspaceId(null)
+    }
+    if (loadLastWorkspaceId() === wsId) {
+      saveLastWorkspaceId(null)
+    }
+    await this.refresh()
   }
 
   async refreshArtifacts(): Promise<void> {
@@ -1027,6 +1081,22 @@ export class AegisCoreShell {
     }
 
     topbar.append(toggleFilesBtn, brand, wsPicker, openBtn)
+
+    if (this.activeWorkspace) {
+      const wsId = this.activeWorkspace.id
+      const removeWsBtn = document.createElement('button')
+      removeWsBtn.type = 'button'
+      removeWsBtn.className = 'aos-btn aos-btn-sm'
+      removeWsBtn.innerHTML = iconHtml('trash')
+      removeWsBtn.title = `Remove ${this.activeWorkspace.name} from workspace list (keeps files on disk)`
+      removeWsBtn.onclick = () => {
+        removeWsBtn.disabled = true
+        void this.removeWorkspaceById(wsId).finally(() => {
+          removeWsBtn.disabled = false
+        })
+      }
+      topbar.appendChild(removeWsBtn)
+    }
 
     const childRepos = this.activeWorkspace?.child_repos ?? []
     if (childRepos.length > 0) {

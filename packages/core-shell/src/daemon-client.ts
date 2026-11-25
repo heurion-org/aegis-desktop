@@ -260,6 +260,12 @@ export class AegisDaemonClient {
     return res.workspace
   }
 
+  removeWorkspace(workspaceId: string): Promise<{ ok: boolean; removed_id: string }> {
+    return this.request(`/v1/workspaces/${encodeURIComponent(workspaceId)}`, {
+      method: 'DELETE',
+    })
+  }
+
   workspaceTree(workspaceId: string, repo?: string | null): Promise<WorkspaceTreeResponse> {
     const q = repo ? `?${new URLSearchParams({ repo }).toString()}` : ''
     return this.request(`/v1/workspaces/${encodeURIComponent(workspaceId)}/tree${q}`)

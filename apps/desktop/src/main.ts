@@ -369,6 +369,7 @@ async function mountWithConnection(root: HTMLElement, conn: DesktopConnection): 
         await shell.refresh()
         await shell.selectWorkspace(ws)
       },
+      onRemoveWorkspace: wsId => shell.removeWorkspaceById(wsId),
       onAgentsUpdated: nextAgents => {
         shell.setAgentsSnapshot(nextAgents)
       },
