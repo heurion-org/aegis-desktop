@@ -41,11 +41,20 @@ export class TaskStreamController {
   private attachedRefs: string[]
   private tasks: DesktopTaskRecord[]
   private disposed = false
+  private textareaEl: HTMLTextAreaElement | null = null
 
   constructor(opts: TaskStreamOptions) {
     this.opts = opts
     this.tasks = opts.tasks ?? []
     this.attachedRefs = opts.attachedRefs ?? []
+  }
+
+  focusComposer(prefillPrompt?: string): void {
+    if (!this.textareaEl) return
+    if (prefillPrompt && !this.textareaEl.value.trim()) {
+      this.textareaEl.value = prefillPrompt
+    }
+    this.textareaEl.focus()
   }
 
   setAgents(agents: DesktopAgentStatus[]): void {
@@ -198,6 +207,7 @@ export class TaskStreamController {
     const roleDesc = ROLE_CATALOG.find(r => r.id === this.role)?.description ?? ''
 
     const textarea = document.createElement('textarea')
+    this.textareaEl = textarea
     textarea.className = 'aos-textarea'
     textarea.rows = 3
     const scopeHint = activeFilePath ?? activeRepo ?? 'current workspace'

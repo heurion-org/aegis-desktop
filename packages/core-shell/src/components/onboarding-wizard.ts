@@ -4,14 +4,7 @@ import { getThemePref, setThemePref, type ThemePref } from '../theme.ts'
 
 export const ONBOARDING_COMPLETED_KEY = 'aegis.desktop.onboarding_completed'
 
-function esc(raw: string): string {
-  return raw
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-}
+export type OnboardingIntent = 'write' | 'data' | 'agent'
 
 export interface WizardStepMeta {
   index: number
@@ -25,32 +18,34 @@ export const WIZARD_STEPS: readonly WizardStepMeta[] = [
   {
     index: 0,
     code: '01',
-    title: 'Welcome',
-    subtitle: 'Local CoW Sandbox & Studios',
-    icon: 'shield',
+    title: 'Workspace',
+    subtitle: 'Pick a local folder',
+    icon: 'folderOpen',
   },
   {
     index: 1,
     code: '02',
-    title: 'Workspace',
-    subtitle: 'Connect project directory',
-    icon: 'folderOpen',
+    title: 'Start With',
+    subtitle: 'Choose your first workflow',
+    icon: 'compass',
   },
   {
     index: 2,
     code: '03',
-    title: 'Agents',
-    subtitle: 'Optional BYO CLI tools',
-    icon: 'terminal',
-  },
-  {
-    index: 3,
-    code: '04',
     title: 'Launch',
-    subtitle: 'Theme & workbench tour',
-    icon: 'compass',
+    subtitle: 'Theme & enter workbench',
+    icon: 'sun',
   },
 ] as const
+
+function esc(raw: string): string {
+  return raw
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
 
 export function shouldShowOnboardingWizard(opts: {
   completedBefore: boolean
@@ -103,13 +98,14 @@ export interface OnboardingWizardOptions {
   onWorkspaceSelected: (ws: DesktopWorkspace) => Promise<void> | void
   onAgentsUpdated?: (agents: DesktopAgentStatus[]) => void
   onThemeChanged?: () => void
-  onComplete: () => void
+  onComplete: (intent?: OnboardingIntent) => void
 }
 
 export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => void {
   document.querySelector('.aos-wizard-backdrop')?.remove()
 
   let step = 0
+  let selectedIntent: OnboardingIntent = 'write'
   let agents = [...opts.agents]
   let workspaces = [...opts.workspaces]
   let activeWorkspace = opts.activeWorkspace
@@ -125,11 +121,11 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
   const shell = document.createElement('div')
   shell.className = 'aos-wizard-shell'
 
-  const finish = () => {
+  const finish = (intent?: OnboardingIntent) => {
     markOnboardingWizardCompleted()
     window.removeEventListener('keydown', onKey)
     backdrop.remove()
-    opts.onComplete()
+    opts.onComplete(intent)
   }
 
   const onKey = (ev: KeyboardEvent) => {
@@ -156,7 +152,7 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
       activeWorkspace = ws
       await opts.onWorkspaceSelected(ws)
       busyMessage = ''
-      step = 2
+      step = 1
       paint()
     } catch (err) {
       busyMessage = ''
@@ -168,13 +164,12 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
   const paint = () => {
     shell.innerHTML = ''
 
-    // Editorial Top Header & Stepper
     const header = document.createElement('header')
     header.className = 'aos-wizard-header'
 
     const brand = document.createElement('div')
     brand.className = 'aos-wizard-brand'
-    brand.innerHTML = `${brandMarkSvg()}<div><span class="aos-eyebrow">HEURION × AEGIS OS</span><strong>Aegis Desktop Setup</strong></div>`
+    brand.innerHTML = `${brandMarkSvg()}<div><span class="aos-eyebrow">HEURION × AEGIS OS</span><strong>Quick Setup</strong></div>`
 
     const stepper = document.createElement('nav')
     stepper.className = 'aos-wizard-stepper'
@@ -195,12 +190,11 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
     const skipBtn = document.createElement('button')
     skipBtn.type = 'button'
     skipBtn.className = 'aos-btn aos-btn-sm'
-    skipBtn.innerHTML = `${iconHtml('x')}<span>Skip Setup</span>`
-    skipBtn.onclick = finish
+    skipBtn.innerHTML = `${iconHtml('x')}<span>Skip</span>`
+    skipBtn.onclick = () => finish()
 
     header.append(brand, stepper, skipBtn)
 
-    // Stage Body
     const body = document.createElement('div')
     body.className = 'aos-wizard-body'
 
@@ -208,58 +202,13 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
       const hero = document.createElement('div')
       hero.className = 'aos-wizard-hero'
       hero.innerHTML = `
-        <div class="aos-eyebrow">STEP 01 · WELCOME</div>
-        <h1 class="aos-serif-title">Write, analyze, and ship<br/><em>without fear.</em></h1>
-        <p class="aos-wizard-lede">
-          Every change runs in an isolated sandbox first — review every diff before it ever touches your repo.
-        </p>
-      `
-
-      const statusBanner = document.createElement('div')
-      statusBanner.className = `aos-wizard-status ${opts.sandboxHealthy ? 'is-ok' : 'is-warn'}`
-      statusBanner.innerHTML = `
-        ${iconHtml(opts.sandboxHealthy ? 'shield' : 'alertTriangle')}
-        <div>
-          <strong>${opts.sandboxHealthy ? 'Sandbox Ready' : 'Sandbox Attention Needed'}</strong>
-          <small>Driver: <code>${esc(opts.sandboxDriver)}</code> · Loopback <code>127.0.0.1</code></small>
+        <div class="aos-wizard-top-tags">
+          <span class="aos-eyebrow">STEP 01 · WORKSPACE</span>
+          <span class="aos-badge ${opts.sandboxHealthy ? 'ok' : 'warn'}">${iconHtml('shield')}<span>${opts.sandboxHealthy ? `Sandbox ready (${esc(opts.sandboxDriver)})` : esc(opts.sandboxDriver)}</span></span>
         </div>
-      `
-
-      const cards = document.createElement('div')
-      cards.className = 'aos-wizard-cards'
-      const pillars: Array<{ icon: IconName; title: string; desc: string }> = [
-        {
-          icon: 'shield',
-          title: 'Zero-Risk Sandbox',
-          desc: 'Inspect live diffs and accept or roll back in one click.',
-        },
-        {
-          icon: 'pen',
-          title: 'Writing & Data Studios',
-          desc: 'Markdown, code, CSV tables, and SVG charts under one roof.',
-        },
-        {
-          icon: 'lock',
-          title: 'Yours By Default',
-          desc: 'Files stay local_only until you decide to sync or approve.',
-        },
-      ]
-      for (const p of pillars) {
-        const card = document.createElement('div')
-        card.className = 'aos-wizard-card'
-        card.innerHTML = `<div class="aos-card-icon">${iconHtml(p.icon)}</div><strong>${p.title}</strong><p>${p.desc}</p>`
-        cards.appendChild(card)
-      }
-
-      body.append(hero, statusBanner, cards)
-    } else if (step === 1) {
-      const intro = document.createElement('div')
-      intro.className = 'aos-wizard-intro'
-      intro.innerHTML = `
-        <div class="aos-eyebrow">STEP 02 · WORKSPACE</div>
-        <h2 class="aos-serif-title">Pick a folder to bring to life</h2>
+        <h1 class="aos-serif-title">Write, analyze, and ship <em>without fear.</em></h1>
         <p class="aos-wizard-lede">
-          Repos and datasets stay isolated cleanly in one place.
+          Pick a project folder to begin — every edit stays isolated until you accept it.
         </p>
       `
 
@@ -297,12 +246,12 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
       }
 
       pickerRow.append(chooseBtn, pathForm)
-      body.append(intro, pickerRow)
+      body.append(hero, pickerRow)
 
       if (workspaces.length > 0) {
         const existingSection = document.createElement('div')
         existingSection.className = 'aos-wizard-existing'
-        existingSection.innerHTML = `<div class="aos-eyebrow">ALREADY CONNECTED WORKSPACES (${workspaces.length})</div>`
+        existingSection.innerHTML = `<div class="aos-eyebrow">CONNECTED WORKSPACES (${workspaces.length})</div>`
         const wsList = document.createElement('div')
         wsList.className = 'aos-wizard-ws-list'
         for (const ws of workspaces) {
@@ -324,7 +273,7 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
           btn.onclick = async () => {
             activeWorkspace = ws
             await opts.onWorkspaceSelected(ws)
-            step = 2
+            step = 1
             paint()
           }
           wsList.appendChild(btn)
@@ -332,38 +281,77 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
         existingSection.appendChild(wsList)
         body.appendChild(existingSection)
       }
-    } else if (step === 2) {
+    } else if (step === 1) {
       const intro = document.createElement('div')
       intro.className = 'aos-wizard-intro'
       intro.innerHTML = `
-        <div class="aos-eyebrow">STEP 03 · AGENTS (OPTIONAL)</div>
-        <h2 class="aos-serif-title">Bring the CLIs you already love</h2>
+        <div class="aos-eyebrow">STEP 02 · CHOOSE YOUR STARTING POINT</div>
+        <h2 class="aos-serif-title">What would you like to do first?</h2>
         <p class="aos-wizard-lede">
-          Writing and Data Studios work standalone — connect AI CLIs whenever you're ready.
+          Pick one to open directly inside your workspace.
         </p>
       `
 
+      const intentGrid = document.createElement('div')
+      intentGrid.className = 'aos-wizard-intent-grid'
+      const intents: Array<{ id: OnboardingIntent; icon: IconName; title: string; desc: string }> = [
+        {
+          id: 'write',
+          icon: 'pen',
+          title: 'Write & Edit Docs',
+          desc: 'Open README or create a Markdown note with live diff.',
+        },
+        {
+          id: 'data',
+          icon: 'chartBar',
+          title: 'Explore Data & Charts',
+          desc: 'Inspect CSV/JSON tables, stats, and SVG charts.',
+        },
+        {
+          id: 'agent',
+          icon: 'terminal',
+          title: 'Run an AI Task',
+          desc: 'Send a sandboxed prompt to Claude, OpenCode, or Codex.',
+        },
+      ]
+      for (const it of intents) {
+        const card = document.createElement('button')
+        card.type = 'button'
+        card.className = `aos-wizard-intent-card ${selectedIntent === it.id ? 'is-selected' : ''}`
+        card.innerHTML = `
+          <div class="aos-card-icon">${iconHtml(it.icon)}</div>
+          <div class="aos-intent-title-row">
+            <strong>${it.title}</strong>
+            ${iconHtml(selectedIntent === it.id ? 'check' : 'arrowRight')}
+          </div>
+          <p>${it.desc}</p>
+        `
+        card.onclick = () => {
+          selectedIntent = it.id
+          paint()
+        }
+        intentGrid.appendChild(card)
+      }
+
+      const cliBox = document.createElement('div')
+      cliBox.className = 'aos-wizard-existing'
+      cliBox.innerHTML = `<div class="aos-eyebrow">OPTIONAL · AI CLIs DETECTED ON YOUR MACHINE</div>`
       const grid = document.createElement('div')
       grid.className = 'aos-wizard-agent-grid'
       for (const ag of agents) {
         const card = document.createElement('div')
-        card.className = `aos-wizard-card ${ag.installed ? 'is-ready' : ''}`
+        card.className = `aos-wizard-card is-compact ${ag.installed ? 'is-ready' : ''}`
         const badgeCls = ag.installed ? (ag.authenticated ? 'ok' : 'warn') : 'muted'
-        const badgeTxt = ag.installed ? (ag.authenticated ? 'Ready' : 'Needs Auth') : 'Optional · Not Installed'
+        const badgeTxt = ag.installed ? (ag.authenticated ? 'Ready' : 'Needs Auth') : 'Optional'
         const top = document.createElement('div')
         top.className = 'aos-approval-top'
         top.innerHTML = `<strong>${esc(ag.display_name)}</strong><span class="aos-badge ${badgeCls}">${badgeTxt}</span>`
-
-        const meta = document.createElement('div')
-        meta.className = 'aos-muted'
-        meta.textContent = ag.version ? `v${ag.version} · Roles: ${ag.roles.join(', ')}` : `Roles: ${ag.roles.join(', ')}`
-
-        card.append(top, meta)
+        card.appendChild(top)
         if (!ag.installed) {
           const instBtn = document.createElement('button')
           instBtn.type = 'button'
           instBtn.className = 'aos-btn aos-btn-sm'
-          instBtn.innerHTML = `${iconHtml('plus')}<span>Install CLI</span>`
+          instBtn.innerHTML = `${iconHtml('plus')}<span>Install</span>`
           instBtn.onclick = async () => {
             instBtn.disabled = true
             instBtn.textContent = 'Installing…'
@@ -388,16 +376,17 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
         }
         grid.appendChild(card)
       }
+      cliBox.appendChild(grid)
 
-      body.append(intro, grid)
+      body.append(intro, intentGrid, cliBox)
     } else {
       const intro = document.createElement('div')
       intro.className = 'aos-wizard-intro'
       intro.innerHTML = `
-        <div class="aos-eyebrow">STEP 04 · LAUNCH</div>
+        <div class="aos-eyebrow">STEP 03 · APPEARANCE &amp; LAUNCH</div>
         <h2 class="aos-serif-title">Make it yours</h2>
         <p class="aos-wizard-lede">
-          Pick a theme — switch anytime from the top bar.
+          Pick a theme — then jump straight into your workspace.
         </p>
       `
 
@@ -407,7 +396,7 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
       const themes: Array<{ pref: ThemePref; icon: IconName; label: string; desc: string }> = [
         { pref: 'light', icon: 'sun', label: 'Nordic Editorial Light', desc: 'Warm paper #FAF8F4 · Forest #233E33' },
         { pref: 'dark', icon: 'moon', label: 'Nordic Forest Dark', desc: 'Deep pine #111614 · Mint #00C472' },
-        { pref: 'system', icon: 'monitor', label: 'Match System', desc: 'Auto-follow your OS appearance' },
+        { pref: 'system', icon: 'monitor', label: 'Match System', desc: 'Auto-follow OS appearance' },
       ]
       for (const th of themes) {
         const btn = document.createElement('button')
@@ -428,17 +417,17 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
         {
           icon: 'layers',
           title: 'Left · Files & Privacy',
-          desc: 'Explore folders, sync rules, and connected CLIs.',
+          desc: 'Browse files and keep sensitive folders local_only.',
         },
         {
           icon: 'pen',
-          title: 'Center · Dual Studios',
+          title: 'Center · Studios',
           desc: 'Markdown split view, CSV charts, and live CoW diffs.',
         },
         {
           icon: 'bell',
-          title: 'Right · Agents & Approvals',
-          desc: 'Attach @File / @Artifact chips and approve actions.',
+          title: 'Right · Assistant & Approvals',
+          desc: 'Run AI tasks and approve boundary actions.',
         },
       ]
       for (const z of zones) {
@@ -464,15 +453,14 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
       body.appendChild(errEl)
     }
 
-    // Editorial Footer Navigation
     const footer = document.createElement('footer')
     footer.className = 'aos-wizard-footer'
 
     const leftNote = document.createElement('small')
     leftNote.className = 'aos-muted'
     leftNote.textContent = activeWorkspace
-      ? `Active workspace: ${activeWorkspace.name} (${activeWorkspace.path})`
-      : 'No workspace selected yet — you can also pick one inside the workbench.'
+      ? `Workspace: ${activeWorkspace.name} · Next: ${selectedIntent === 'write' ? 'Writing Studio' : selectedIntent === 'data' ? 'Data Studio' : 'AI Assistant'}`
+      : 'Tip: Pick a workspace folder in Step 01 to start editing right away.'
 
     const navBtns = document.createElement('div')
     navBtns.className = 'aos-wizard-nav-btns'
@@ -494,7 +482,7 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
       const nextBtn = document.createElement('button')
       nextBtn.type = 'button'
       nextBtn.className = 'aos-btn aos-btn-primary'
-      nextBtn.innerHTML = `<span>${step === 1 && !activeWorkspace ? 'Continue Without Folder' : 'Continue'}</span>${iconHtml('arrowRight')}`
+      nextBtn.innerHTML = `<span>Continue</span>${iconHtml('arrowRight')}`
       nextBtn.onclick = () => {
         errorMessage = ''
         step += 1
@@ -505,8 +493,8 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
       const enterBtn = document.createElement('button')
       enterBtn.type = 'button'
       enterBtn.className = 'aos-btn aos-btn-primary'
-      enterBtn.innerHTML = `<span>Enter Workbench</span>${iconHtml('arrowRight')}`
-      enterBtn.onclick = finish
+      enterBtn.innerHTML = `<span>Start Working</span>${iconHtml('arrowRight')}`
+      enterBtn.onclick = () => finish(selectedIntent)
       navBtns.appendChild(enterBtn)
     }
 
@@ -517,5 +505,5 @@ export function renderOnboardingWizard(opts: OnboardingWizardOptions): () => voi
   paint()
   backdrop.appendChild(shell)
   document.body.appendChild(backdrop)
-  return finish
+  return () => finish()
 }

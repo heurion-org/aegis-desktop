@@ -375,8 +375,8 @@ async function mountWithConnection(root: HTMLElement, conn: DesktopConnection): 
       onThemeChanged: () => {
         shell.render()
       },
-      onComplete: () => {
-        shell.render()
+      onComplete: intent => {
+        void shell.runIntentAction(intent)
       },
     })
   }
@@ -433,6 +433,7 @@ async function mountWithConnection(root: HTMLElement, conn: DesktopConnection): 
         filePath,
         entitlements: ctx.entitlements,
         onRequestUpgrade: ctx.onRequestUpgrade,
+        quickActions: ctx.quickActions,
       })
     },
   })

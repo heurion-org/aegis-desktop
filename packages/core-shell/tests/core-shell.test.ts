@@ -16,7 +16,7 @@ import {
 import { selectAgentForRole } from '../src/roles.ts'
 import { filterTreeEntries, upsertSyncRule } from '../src/components/workspace-tree.ts'
 import { brandMarkSvg, iconHtml } from '../src/icons.ts'
-import { shouldShowOnboardingWizard } from '../src/components/onboarding-wizard.ts'
+import { WIZARD_STEPS, shouldShowOnboardingWizard } from '../src/components/onboarding-wizard.ts'
 
 test('Free tier permits local .md and coding files while gating rich CRDT formats to Cloud Pro', () => {
   const md = resolveFormatAccess('notes/architecture.md', DEFAULT_FREE_ENTITLEMENTS)
@@ -277,6 +277,7 @@ test('vector SVG icon helpers and onboarding wizard trigger work cleanly without
   const mark = brandMarkSvg('aos-boot-mark')
   assert.match(mark, /class="aos-brand-mark aos-boot-mark"/)
 
+  assert.equal(WIZARD_STEPS.length, 3)
   assert.equal(shouldShowOnboardingWizard({ completedBefore: false, workspaceCount: 2 }), true)
   assert.equal(shouldShowOnboardingWizard({ completedBefore: true, workspaceCount: 0 }), true)
   assert.equal(shouldShowOnboardingWizard({ completedBefore: true, workspaceCount: 1 }), false)
