@@ -1,0 +1,8 @@
+node_modules/
+dist/
+target/
+apps/desktop/src-tauri/binaries/
+*.dmg
+*.deb
+*.AppImage
+.DS_Store
