@@ -69,24 +69,70 @@ jobs:
           BASE_URL="https://github.com/${{ github.repository_owner }}/aegis-os/releases/download/${AEGIS_OS_TAG}"
           curl -fsSL "${BASE_URL}/${ASSET}" -o "/tmp/${ASSET}"
           curl -fsSL "${BASE_URL}/SHA256SUMS" -o /tmp/SHA256SUMS
-          (cd /tmp && grep "  ${ASSET}\$" SHA256SUMS | sha256sum -c -)
+          (
+            cd /tmp
+            if command -v sha256sum >/dev/null 2>&1; then
+              grep "  ${ASSET}\$" SHA256SUMS | sha256sum -c -
+            else
+              grep "  ${ASSET}\$" SHA256SUMS | shasum -a 256 -c -
+            fi
+          )
           tar -xzf "/tmp/${ASSET}" -C /tmp
           cp /tmp/aegis-os "apps/desktop/src-tauri/binaries/aegis-os-${{ matrix.target }}"
           chmod +x "apps/desktop/src-tauri/binaries/aegis-os-${{ matrix.target }}"
 
+      - name: Configure optional Apple signing environment
+        if: runner.os == 'macOS'
+        env:
+          _APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          _APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          _APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          _APPLE_ID: ${{ secrets.APPLE_ID }}
+          _APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          _APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -n "$(printf '%s' "${_APPLE_CERTIFICATE}" | tr -d '[:space:]')" ]; then
+            echo "Apple signing certificate detected; exporting APPLE_* signing environment."
+            {
+              echo "APPLE_CERTIFICATE<<__AEGIS_ENV_EOF__"
+              printf '%s\n' "${_APPLE_CERTIFICATE}"
+              echo "__AEGIS_ENV_EOF__"
+            } >> "$GITHUB_ENV"
+            if [ -n "${_APPLE_CERTIFICATE_PASSWORD}" ]; then
+              {
+                echo "APPLE_CERTIFICATE_PASSWORD<<__AEGIS_ENV_EOF__"
+                printf '%s\n' "${_APPLE_CERTIFICATE_PASSWORD}"
+                echo "__AEGIS_ENV_EOF__"
+              } >> "$GITHUB_ENV"
+            fi
+            if [ -n "${_APPLE_SIGNING_IDENTITY}" ]; then
+              echo "APPLE_SIGNING_IDENTITY=${_APPLE_SIGNING_IDENTITY}" >> "$GITHUB_ENV"
+            fi
+            if [ -n "${_APPLE_ID}" ]; then
+              echo "APPLE_ID=${_APPLE_ID}" >> "$GITHUB_ENV"
+            fi
+            if [ -n "${_APPLE_PASSWORD}" ]; then
+              {
+                echo "APPLE_PASSWORD<<__AEGIS_ENV_EOF__"
+                printf '%s\n' "${_APPLE_PASSWORD}"
+                echo "__AEGIS_ENV_EOF__"
+              } >> "$GITHUB_ENV"
+            fi
+            if [ -n "${_APPLE_TEAM_ID}" ]; then
+              echo "APPLE_TEAM_ID=${_APPLE_TEAM_ID}" >> "$GITHUB_ENV"
+            fi
+          else
+            echo "APPLE_CERTIFICATE secret not configured; skipping Apple codesign/notarization."
+          fi
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           projectPath: apps/desktop
           tagName: desktop-v__VERSION__
           releaseName: 'Aegis Desktop v__VERSION__'
           releaseDraft: false
           prerelease: false
+          retryAttempts: 3
           args: --target ${{ matrix.target }}

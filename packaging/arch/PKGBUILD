@@ -1,6 +1,6 @@
 # Maintainer: Heurion Org <opensource@heurion.org>
 pkgname=aegis-desktop
-pkgver=0.1.0
+pkgver=0.1.1
 pkgrel=1
 _aegis_os_ver=0.12.2
 pkgdesc='Local CoW Sandbox Workbench, Writing Studio, and Data Studio for Aegis OS'
