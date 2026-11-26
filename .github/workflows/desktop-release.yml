@@ -9,7 +9,7 @@ on:
       aegis_os_tag:
         description: Pinned aegis-os release tag to bundle as sidecar
         required: true
-        default: v0.12.2
+        default: v0.12.3
 
 permissions:
   contents: write
@@ -62,7 +62,7 @@ jobs:
 
       - name: Download pinned aegis-os sidecar & verify SHA-256
         env:
-          AEGIS_OS_TAG: ${{ inputs.aegis_os_tag || 'v0.12.2' }}
+          AEGIS_OS_TAG: ${{ inputs.aegis_os_tag || 'v0.12.3' }}
         run: |
           mkdir -p apps/desktop/src-tauri/binaries
           ASSET="aegis-os-${AEGIS_OS_TAG}-${{ matrix.target }}.tar.gz"

@@ -51,7 +51,7 @@ Requirements differ sharply depending on whether you are running a **pre-built r
 | Mode | Node.js & pnpm | Rust Toolchain | OS WebView / GTK Dev Libs | `aegis-os` Binary | OS Sandbox (`bwrap`) | AI CLIs (BYO) |
 | --- | --- | --- | --- | --- | --- | --- |
 | **1. End-User Installer** (`.dmg` / `.deb` / `.AppImage` / Arch `PKGBUILD`) | **No** *(except `makepkg` build)* | **No** *(except `makepkg` build)* | **No** *(runtime only; `.deb` & `PKGBUILD` declare deps)* | **Bundled** | Linux: **Yes** (`bubblewrap`) · macOS: Built-in (`sandbox-exec`) | Optional *(only to run AI agent tasks)* |
-| **2. Developer Web Mode** (`pnpm dev` + daemon) | **Yes** (`Node >= 24`, `pnpm >= 10`) | **No** | **No** | **Yes** (`>= v0.12.2` or `cargo run` from source) | Linux: Recommended (`bubblewrap`) | Optional |
+| **2. Developer Web Mode** (`pnpm dev` + daemon) | **Yes** (`Node >= 24`, `pnpm >= 10`) | **No** | **No** | **Yes** (`>= v0.12.3` or `cargo run` from source) | Linux: Recommended (`bubblewrap`) | Optional |
 | **3. Developer Native Tauri Mode** (`tauri dev` / `tauri build`) | **Yes** (`Node >= 24`, `pnpm >= 10`) | **Yes** (`rustup` / `cargo`) | **Yes** *(macOS Xcode CLT; Linux WebKitGTK 4.1 + GTK dev libs)* | Dev: `AEGIS_OS_BIN` or `PATH` · Release bundle: `src-tauri/binaries/` | Linux: Recommended (`bubblewrap`) | Optional |
 
 ### Linux System Dependencies
@@ -131,7 +131,7 @@ GDK_BACKEND=x11 aegis-desktop
 Run the frontend in your browser while talking to a local `aegis-os desktop-daemon`:
 
 ```bash
-# Terminal 1: start the Aegis OS desktop daemon (using installed aegis-os >= v0.12.2,
+# Terminal 1: start the Aegis OS desktop daemon (using installed aegis-os >= v0.12.3,
 # or `cargo run -p aos-cli -- desktop-daemon --listen 127.0.0.1:43123` from ../aegis-os)
 aegis-os desktop-daemon --listen 127.0.0.1:43123
 # Copy the `human_token` ("aht_...") printed in the 1-line JSON handshake on stdout

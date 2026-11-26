@@ -1,6 +1,6 @@
 [package]
 name = "aegis-desktop"
-version = "0.1.1"
+version = "0.1.2"
 description = "Aegis Desktop — Local CoW Sandbox Workbench & Dual-Surface Writing Studio"
 edition = "2021"
 
